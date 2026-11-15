@@ -234,7 +234,7 @@ function blocks(input, shared) {
       }
     }
     if ((m = /^( {0,3})([*+-]|\d{1,9}[.)])([ \t]+)(.*)$/.exec(line))) {
-      const ordered = /^\d/.test(m[2]), tag = ordered ? 'ol' : 'ul', start = ordered ? +m[2] : 1, items = [];
+      const ordered = /^\d/.test(m[2]), tag = ordered ? 'ol' : 'ul', start = ordered ? parseInt(m[2], 10) : 1, items = [];
       let loose = false;
       while (i < lines.length) {
         const item = /^( {0,3})([*+-]|\d{1,9}[.)])([ \t]+)(.*)$/.exec(lines[i]);
@@ -269,8 +269,8 @@ function blocks(input, shared) {
       });
       html.push(`<${tag}${ordered && start !== 1 ? ` start="${start}"` : ''}>\n${rendered.join('\n')}\n</${tag}>\n`); continue;
     }
-    const para = [line.replace(/^ {0,3}/, '')]; i++;
-    while (i < lines.length && !blank(i) && !/^( {0,3}(?:#{1,6})(?:[ \t]|$)| {0,3}>| {0,3}(?:[*+-]|\d+[.)])[ \t]+| {0,3}(?:`{3,}|~{3,}))/.test(lines[i])) { if (/^ {0,3}(?:=+|-+)[ \t]*$/.test(lines[i])) { const level = lines[i].trim()[0] === '=' ? 1 : 2; html.push(`<h${level}>${inline(para.join('\n'), refs)}</h${level}>\n`); i++; para.length = 0; break; } para.push(lines[i++].replace(/^ {0,3}/, '')); }
+    const para = [line]; i++;
+    while (i < lines.length && !blank(i) && !/^( {0,3}(?:#{1,6})(?:[ \t]|$)| {0,3}>| {0,3}(?:[*+-]|\d+[.)])[ \t]+| {0,3}(?:`{3,}|~{3,}))/.test(lines[i])) { if (/^ {0,3}(?:=+|-+)[ \t]*$/.test(lines[i])) { const level = lines[i].trim()[0] === '=' ? 1 : 2; html.push(`<h${level}>${inline(para.join('\n'), refs)}</h${level}>\n`); i++; para.length = 0; break; } para.push(lines[i++]); }
     if (para.length) html.push(`<p>${inline(para.join('\n'), refs)}</p>\n`);
   }
   return html.join('');
