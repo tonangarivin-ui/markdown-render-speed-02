@@ -168,6 +168,7 @@ function definition(lines, at) {
   if (!label || source.slice(i, i + 2) !== ']:') return null;
   i += 2; while (/\s/.test(source[i])) i++;
   let url = '';
+  if (i === source.length) return null;
   if (source[i] === '<') {
     const start = ++i; while (i < source.length && source[i] !== '>' && source[i] !== '\n') i++;
     if (source[i] !== '>' || /[<>]/.test(source.slice(start, i))) return null;

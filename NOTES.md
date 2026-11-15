@@ -1,2 +1,3 @@
 - entity and numeric character references: 6 -> 3 failing; total 526 -> 525. Preserved valid source references, bounded numeric forms, and stopped URL encoding.
 - HTML blocks: 14 -> 4 failing; total 525 -> 536. Removed the synthetic newline only at an interior type-6/7 blank-line boundary.
+- link reference definitions: 14 -> 13 failing; total 536 -> 537. Rejected bare definitions without a destination while retaining explicit `<>`.
