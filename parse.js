@@ -13,23 +13,56 @@ const entity = s => s.replace(/&#(?:x[\da-f]+|\d+);/gi, m => {
   return x && x <= 0x10ffff && !(x >= 0xd800 && x <= 0xdfff) ? String.fromCodePoint(x) : '�';
 });
 
-function findClose(s, at) {
-  let depth = 0;
-  for (let i = at; i < s.length; i++) {
-    if (s[i] === '\\') { i++; continue; }
-    if (s[i] === '(') depth++;
-    else if (s[i] === ')') { if (!depth) return i; depth--; }
-  }
-  return -1;
-}
-
 function destination(s) {
-  s = s.trim();
-  if (s.startsWith('<') && s.endsWith('>') && !/[\n<>\\]/.test(s.slice(1, -1))) return s.slice(1, -1);
-  if (!s || /[\s<>]/.test(s)) return null;
+  if (s.startsWith('<') && s.endsWith('>') && !/[\n<>]/.test(s.slice(1, -1))) return s.slice(1, -1);
+  if (/[\s<>]/.test(s)) return null;
   let d = 0;
   for (let i = 0; i < s.length; i++) { if (s[i] === '\\') i++; else if (s[i] === '(') d++; else if (s[i] === ')' && --d < 0) return null; }
   return d ? null : s;
+}
+
+function linkTail(s, open) {
+  let i = open + 1, url = '', title;
+  while (/[ \t\n]/.test(s[i])) i++;
+  let angle = false;
+  if (s[i] === '<') {
+    angle = true;
+    const start = ++i;
+    while (i < s.length && s[i] !== '\n' && (s[i] !== '>' || s[i - 1] === '\\')) i++;
+    if (s[i] !== '>') return null;
+    url = s.slice(start, i++);
+  } else {
+    const start = i; let depth = 0;
+    while (i < s.length) {
+      if (s[i] === '\\') { i += 2; continue; }
+      if (s[i] === '(') depth++;
+      else if (s[i] === ')') { if (!depth) break; depth--; }
+      else if (/\s/.test(s[i])) break;
+      i++;
+    }
+    if (depth) return null;
+    url = s.slice(start, i);
+  }
+  const afterURL = i;
+  while (/[ \t\n]/.test(s[i])) i++;
+  if (s[i] === '"' || s[i] === "'" || s[i] === '(') {
+    const delimiter = s[i++], close = delimiter === '(' ? ')' : delimiter, start = i;
+    while (i < s.length && (s[i] !== close || s[i - 1] === '\\')) i++;
+    if (s[i] !== close) return null;
+    title = s.slice(start, i++);
+    while (/[ \t\n]/.test(s[i])) i++;
+  } else if (i !== afterURL) return null;
+  return s[i] === ')' ? { end: i + 1, url, title, angle } : null;
+}
+
+function labelClose(s, start) {
+  let depth = 0;
+  for (let i = start; i < s.length; i++) {
+    if (s[i] === '\\') { i++; continue; }
+    if (s[i] === '[') depth++;
+    else if (s[i] === ']') { if (!depth) return i; depth--; }
+  }
+  return -1;
 }
 
 function resolveEmphasis(s) {
@@ -103,20 +136,18 @@ function inline(source, refs = Object.create(null), depth = 0) {
     if ((m = /^<([A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+)>/.exec(rest))) { put(`<a href="mailto:${esc(m[1])}">${esc(m[1])}</a>`); i += m[0].length; continue; }
     const image = source[i] === '!' && source[i + 1] === '[';
     if (source[i] === '[' || image) {
-      const begin = i + (image ? 2 : 1), close = source.indexOf(']', begin);
+      const begin = i + (image ? 2 : 1), close = labelClose(source, begin);
       if (close >= 0) {
         const label = source.slice(begin, close); let end = close + 1, url, title;
         if (source[end] === '(') {
-          const stop = findClose(source, end + 1); if (stop >= 0) {
-            const body = source.slice(end + 1, stop); const tm = /^(<[^>\n]*>|[^\s]+?)(?:\s+(?:"([\s\S]*)"|'([\s\S]*)'|\(([\s\S]*)\)))?\s*$/.exec(body);
-            if (tm && (url = destination(tm[1])) !== null) { title = tm[2] ?? tm[3] ?? tm[4]; end = stop + 1; }
-          }
+          const tail = linkTail(source, end);
+          if (tail && (url = tail.angle ? tail.url : destination(tail.url)) !== null) ({ end, title } = tail);
         } else {
           let ref = label;
-          if (source[end] === '[') { const r = source.indexOf(']', end + 1); if (r >= 0) { ref = source.slice(end + 1, r) || label; end = r + 1; } }
+          if (source[end] === '[') { const r = labelClose(source, end + 1); if (r >= 0) { ref = source.slice(end + 1, r) || label; end = r + 1; } }
           const def = refs[normalize(ref)]; if (def) { url = def.url; title = def.title; }
         }
-        if (url != null) { url = uri(entity(url).replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/g, '$1')); const attr = title !== undefined ? ` title="${esc(entity(title))}"` : ''; put(image ? `<img src="${esc(url)}" alt="${esc(alt(label))}"${attr}>` : `<a href="${esc(url)}"${attr}>${inline(label, refs, depth + 1)}</a>`); i = end; continue; }
+        if (url != null) { url = uri(entity(url).replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/g, '$1')); const attr = title !== undefined ? ` title="${esc(entity(title))}"` : ''; const body = inline(label, refs, depth + 1); put(image ? `<img src="${esc(url)}" alt="${esc(alt(body.replace(/<[^>]*>/g, '')))}"${attr}>` : `<a href="${esc(url)}"${attr}>${body}</a>`); i = end; continue; }
       }
     }
     if ((m = /^~~(?=\S)([\s\S]*?\S)~~/.exec(rest))) { put(`<del>${inline(m[1], refs, depth + 1)}</del>`); i += m[0].length; continue; }
