@@ -238,13 +238,14 @@ function blocks(input, shared) {
       let loose = false;
       while (i < lines.length) {
         const item = /^( {0,3})([*+-]|\d{1,9}[.)])([ \t]+)(.*)$/.exec(lines[i]);
-        if (!item || /^\d/.test(item[2]) !== ordered) break;
+        if (!item || /^\d/.test(item[2]) !== ordered || item[2].at(-1) !== m[2].at(-1)) break;
         const marker = item[1].length + item[2].length, pad = item[3].replace(/\t/g, '    ').length;
-        const indent = pad > 4 ? marker + 1 : marker + pad, body = [item[4]]; let sawBlank = false; i++;
+        const indent = pad > 4 ? marker + 1 : marker + pad, body = [`${pad > 4 ? ' '.repeat(pad - 1) : ''}${item[4]}`]; let sawBlank = false; i++;
         while (i < lines.length) {
           if (blank(i)) {
-            const next = lines[i + 1] ?? '';
-            if (/^( {0,3})([*+-]|\d{1,9}[.)])[ \t]+/.test(next) || (next.match(/^ */) ?? [''])[0].length >= indent) sawBlank = true;
+            const next = lines[i + 1] ?? '', nextIndent = (next.match(/^ */) ?? [''])[0].length;
+            if (!/^\s*$/.test(next) && !/^( {0,3})([*+-]|\d{1,9}[.)])[ \t]+/.test(next) && nextIndent < indent) break;
+            if (/^( {0,3})([*+-]|\d{1,9}[.)])[ \t]+/.test(next) || nextIndent >= indent) sawBlank = true;
             body.push(''); i++; continue;
           }
           if (/^( {0,3})([*+-]|\d{1,9}[.)])[ \t]+/.test(lines[i])) break;
