@@ -1,0 +1,1 @@
+- entity and numeric character references: 6 -> 3 failing; total 526 -> 525. Preserved valid source references, bounded numeric forms, and stopped URL encoding.

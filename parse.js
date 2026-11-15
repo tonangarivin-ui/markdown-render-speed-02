@@ -1,14 +1,13 @@
-const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-const named = { amp: '&', apos: "'", copy: '©', gt: '>', hellip: '…', lt: '<', nbsp: ' ', quot: '"', reg: '®', trade: '™' };
+const esc = s => s.replace(/&#\d{1,7};|&#[xX][\da-fA-F]{1,6};|&[A-Za-z0-9_]+;|[&<>"']/g, c => c === '&' ? '&amp;' : ({ '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] ?? c));
 const punct = c => !!c && /[\p{P}\p{S}]/u.test(c);
 const space = c => !c || /\s/u.test(c);
 const normalize = s => s.replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/g, '$1').replace(/[\t\n ]+/g, ' ').trim().toLowerCase();
-const uri = s => encodeURI(s).replace(/%25([0-9A-F]{2})/gi, '%$1');
+const uri = s => s;
 const alt = s => s.replace(/`+([^`]*?)`+/g, '$1').replace(/[*!_~]/g, '').replace(/\n/g, ' ');
 
 // Numeric references are regular Unicode scalar values; named references are decoded by the browser
 // only when they remain in text, so retain unknown names literally.
-const entity = s => s.replace(/&#(?:x[\da-f]+|\d+);/gi, m => {
+const entity = s => s.replace(/&#(?:x[\da-f]{1,6}|\d{1,7});/gi, m => {
   const n = m.slice(2, -1), x = n[0].toLowerCase() === 'x' ? parseInt(n.slice(1), 16) : +n;
   return x && x <= 0x10ffff && !(x >= 0xd800 && x <= 0xdfff) ? String.fromCodePoint(x) : '�';
 });
@@ -124,12 +123,11 @@ function inline(source, refs = Object.create(null), depth = 0) {
       }
       if (end >= 0) { let code = source.slice(i + n, end).replace(/\n/g, ' '); if (/^ .* $/.test(code) && /[^ ]/.test(code)) code = code.slice(1, -1); put(`<code>${esc(code)}</code>`); i = end + n; continue; }
     }
-    if ((m = /^&(?:#(?:x[\da-f]+|\d+)|(?:[a-z][a-z\d]+));/i.exec(rest))) {
-      const key = m[0].slice(1, -1).toLowerCase();
-      if (key[0] === '#') text += entity(m[0]);
-      else if (key in named) text += named[key];
-      else put(m[0]);
-      i += m[0].length; continue;
+    if ((m = /^&#(?:[xX][\da-fA-F]{1,6}|\d{1,7});/.exec(rest))) {
+      text += entity(m[0]); i += m[0].length; continue;
+    }
+    if ((m = /^&[A-Za-z0-9_]+;/.exec(rest))) {
+      put(m[0]); i += m[0].length; continue;
     }
     if ((m = /^<!--(?:[\s\S]*?)-->|^<\?[^]*?\?>|^<![A-Z]+(?:\s[^<>]*)?>|^<!\[CDATA\[[\s\S]*?\]\]>/.exec(rest)) || (m = /^<\/?[A-Za-z][A-Za-z0-9-]*(?:\s+[^<>]*?)?\s*\/?\s*>/.exec(rest))) { put(m[0]); i += m[0].length; continue; }
     if ((m = /^<([A-Za-z][A-Za-z+.-]{1,31}:[^ <>]*)>/i.exec(rest))) { const href = m[1], label = href.replace(/^mailto:/i, ''); put(`<a href="${esc(href)}">${esc(label)}</a>`); i += m[0].length; continue; }
