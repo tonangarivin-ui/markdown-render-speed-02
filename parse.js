@@ -2,7 +2,7 @@ const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&
 const named = { amp: '&', apos: "'", copy: '©', gt: '>', hellip: '…', lt: '<', nbsp: ' ', quot: '"', reg: '®', trade: '™' };
 const punct = c => !!c && /[\p{P}\p{S}]/u.test(c);
 const space = c => !c || /\s/u.test(c);
-const normalize = s => s.replace(/[\t\n ]+/g, ' ').trim().toLowerCase();
+const normalize = s => s.replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/g, '$1').replace(/[\t\n ]+/g, ' ').trim().toLowerCase();
 const uri = s => encodeURI(s).replace(/%25([0-9A-F]{2})/gi, '%$1');
 const alt = s => s.replace(/`+([^`]*?)`+/g, '$1').replace(/[*!_~]/g, '').replace(/\n/g, ' ');
 
@@ -157,6 +157,44 @@ function inline(source, refs = Object.create(null), depth = 0) {
   return resolveEmphasis(text).replace(/(\d+)/g, (_, n) => slots[+n]);
 }
 
+function definition(lines, at) {
+  if (!/^ {0,3}\[/.test(lines[at])) return null;
+  let used = 0; while (at + used < lines.length && !/^\s*$/.test(lines[at + used])) used++;
+  const source = lines.slice(at, at + used).join('\n');
+  let i = source.match(/^ {0,3}/)[0].length + 1, label = '';
+  for (; i < source.length; i++) {
+    if (source[i] === '\\') { label += source[i++] + (source[i] ?? ''); continue; }
+    if (source[i] === ']') break;
+    label += source[i];
+  }
+  if (!label || source.slice(i, i + 2) !== ']:') return null;
+  i += 2; while (/\s/.test(source[i])) i++;
+  let url = '';
+  if (source[i] === '<') {
+    const start = ++i; while (i < source.length && source[i] !== '>' && source[i] !== '\n') i++;
+    if (source[i] !== '>' || /[<>]/.test(source.slice(start, i))) return null;
+    url = source.slice(start, i++);
+  } else {
+    const start = i; let depth = 0;
+    while (i < source.length && !/\s/.test(source[i])) {
+      if (source[i] === '\\') i += 2;
+      else { if (source[i] === '(') depth++; else if (source[i] === ')' && --depth < 0) return null; i++; }
+    }
+    if (depth) return null;
+    url = source.slice(start, i);
+  }
+  while (/\s/.test(source[i])) i++;
+  let title;
+  if (source[i] === '"' || source[i] === "'" || source[i] === '(') {
+    const open = source[i++], close = open === '(' ? ')' : open, start = i;
+    while (i < source.length && (source[i] !== close || source[i - 1] === '\\')) i++;
+    if (source[i] !== close) return null;
+    title = source.slice(start, i++);
+    while (/[ \t\n]/.test(source[i])) i++;
+  }
+  return i === source.length ? { label, url, title, used } : null;
+}
+
 function htmlBlockStart(line) {
   const special = /^ {0,3}<(script|pre|style|textarea)(?:\s|>|$)/i.exec(line);
   if (special) return new RegExp(`</${special[1]}\\s*>`, 'i');
@@ -174,7 +212,7 @@ function blocks(input, shared) {
     let col = 0, out = ''; for (const c of line) { if (c === '\t') { const n = 4 - col % 4; out += ' '.repeat(n); col += n; } else { out += c; col++; } } return out;
   });
   const refs = shared ?? Object.create(null);
-  for (let n = 0; n < lines.length; n++) { const d = /^ {0,3}\[([^\]]*(?:\n[ \t]*[^\]]+)*)\]:\s*(<[^>\n]*>|\S+)(?:\s+(?:"([^\n"]*)"|'([^\n']*)'|\(([^\n)]*)\)))?\s*$/.exec(lines[n]); if (d) { const u = destination(d[2]); if (u !== null) refs[normalize(d[1])] = { url: u, title: d[3] ?? d[4] ?? d[5] }; lines[n] = ''; } }
+  for (let n = 0; n < lines.length;) { const d = definition(lines, n); if (!d) { n++; continue; } refs[normalize(d.label)] = { url: d.url, title: d.title }; lines.splice(n, d.used, ...Array(d.used).fill('')); n += d.used; }
   const html = [], blank = n => /^\s*$/.test(lines[n] ?? ''); let i = 0;
   while (i < lines.length) {
     if (blank(i)) { i++; continue; } let line = lines[i], m;
