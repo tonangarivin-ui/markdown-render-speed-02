@@ -122,7 +122,7 @@ function inline(source, refs = Object.create(null), depth = 0) {
         if (k - j === n) { end = j; break; }
         j = k;
       }
-      if (end >= 0) { let code = source.slice(i + n, end).replace(/[\n ]+/g, ' '); if (/^ .* $/.test(code) && /[^ ]/.test(code)) code = code.slice(1, -1); put(`<code>${esc(code)}</code>`); i = end + n; continue; }
+      if (end >= 0) { let code = source.slice(i + n, end).replace(/\n/g, ' '); if (/^ .* $/.test(code) && /[^ ]/.test(code)) code = code.slice(1, -1); put(`<code>${esc(code)}</code>`); i = end + n; continue; }
     }
     if ((m = /^&(?:#(?:x[\da-f]+|\d+)|(?:[a-z][a-z\d]+));/i.exec(rest))) {
       const key = m[0].slice(1, -1).toLowerCase();
@@ -268,8 +268,8 @@ function blocks(input, shared) {
       });
       html.push(`<${tag}${ordered && start !== 1 ? ` start="${start}"` : ''}>\n${rendered.join('\n')}\n</${tag}>\n`); continue;
     }
-    const para = [line.trim()]; i++;
-    while (i < lines.length && !blank(i) && !/^( {0,3}(?:#{1,6})(?:[ \t]|$)| {0,3}>| {0,3}(?:[*+-]|\d+[.)])[ \t]+| {0,3}(?:`{3,}|~{3,}))/.test(lines[i])) { if (/^ {0,3}(?:=+|-+)[ \t]*$/.test(lines[i])) { const level = lines[i].trim()[0] === '=' ? 1 : 2; html.push(`<h${level}>${inline(para.join('\n'), refs)}</h${level}>\n`); i++; para.length = 0; break; } para.push(lines[i++].trim()); }
+    const para = [line.replace(/^ {0,3}/, '')]; i++;
+    while (i < lines.length && !blank(i) && !/^( {0,3}(?:#{1,6})(?:[ \t]|$)| {0,3}>| {0,3}(?:[*+-]|\d+[.)])[ \t]+| {0,3}(?:`{3,}|~{3,}))/.test(lines[i])) { if (/^ {0,3}(?:=+|-+)[ \t]*$/.test(lines[i])) { const level = lines[i].trim()[0] === '=' ? 1 : 2; html.push(`<h${level}>${inline(para.join('\n'), refs)}</h${level}>\n`); i++; para.length = 0; break; } para.push(lines[i++].replace(/^ {0,3}/, '')); }
     if (para.length) html.push(`<p>${inline(para.join('\n'), refs)}</p>\n`);
   }
   return html.join('');
