@@ -207,9 +207,17 @@ function htmlBlockStart(line) {
 }
 
 function blocks(input, shared) {
-  const lines = input.replace(/\r\n?/g, '\n').replace(/\0/g, '�').split('\n').map(line => {
-    let col = 0, out = ''; for (const c of line) { if (c === '\t') { const n = 4 - col % 4; out += ' '.repeat(n); col += n; } else { out += c; col++; } } return out;
-  });
+  // Expand tabs to 4-column stops in the leading whitespace prefix only, so
+  // indentation decisions see 4-column tabs while code content keeps raw tabs.
+  const detab = line => {
+    let col = 0, i = 0;
+    while (i < line.length && (line[i] === ' ' || line[i] === '\t')) {
+      if (line[i] === '\t') col += 4 - col % 4; else col++;
+      i++;
+    }
+    return ' '.repeat(col) + line.slice(i);
+  };
+  const lines = input.replace(/\r\n?/g, '\n').replace(/\0/g, '�').split('\n').map(detab);
   const refs = shared ?? Object.create(null);
   for (let n = 0; n < lines.length;) { const d = definition(lines, n); if (!d) { n++; continue; } refs[normalize(d.label)] = { url: d.url, title: d.title }; lines.splice(n, d.used, ...Array(d.used).fill('')); n += d.used; }
   const html = [], blank = n => /^\s*$/.test(lines[n] ?? ''); let i = 0;
