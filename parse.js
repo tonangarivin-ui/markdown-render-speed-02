@@ -1,4 +1,5 @@
-const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+const named = { amp: '&', apos: "'", copy: '©', gt: '>', hellip: '…', lt: '<', nbsp: ' ', quot: '"', reg: '®', trade: '™' };
 const punct = c => !!c && /[\p{P}\p{S}]/u.test(c);
 const space = c => !c || /\s/u.test(c);
 const normalize = s => s.replace(/[\t\n ]+/g, ' ').trim().toLowerCase();
@@ -90,9 +91,15 @@ function inline(source, refs = Object.create(null), depth = 0) {
       }
       if (end >= 0) { let code = source.slice(i + n, end).replace(/[\n ]+/g, ' '); if (/^ .* $/.test(code) && /[^ ]/.test(code)) code = code.slice(1, -1); put(`<code>${esc(code)}</code>`); i = end + n; continue; }
     }
-    if ((m = /^&(?:#(?:x[\da-f]+|\d+)|(?:[a-z][a-z\d]+));/i.exec(rest))) { text += entity(m[0]); i += m[0].length; continue; }
+    if ((m = /^&(?:#(?:x[\da-f]+|\d+)|(?:[a-z][a-z\d]+));/i.exec(rest))) {
+      const key = m[0].slice(1, -1).toLowerCase();
+      if (key[0] === '#') text += entity(m[0]);
+      else if (key in named) text += named[key];
+      else put(m[0]);
+      i += m[0].length; continue;
+    }
     if ((m = /^<!--(?:[\s\S]*?)-->|^<\?[^]*?\?>|^<![A-Z]+(?:\s[^<>]*)?>|^<!\[CDATA\[[\s\S]*?\]\]>/.exec(rest)) || (m = /^<\/?[A-Za-z][A-Za-z0-9-]*(?:\s+[^<>]*?)?\s*\/?\s*>/.exec(rest))) { put(m[0]); i += m[0].length; continue; }
-    if ((m = /^<([A-Za-z][A-Za-z+.-]{1,31}:[^ <>]*)>/.exec(rest))) { const href = m[1], label = href.replace(/^mailto:/i, ''); put(`<a href="${esc(href)}">${esc(label)}</a>`); i += m[0].length; continue; }
+    if ((m = /^<([A-Za-z][A-Za-z+.-]{1,31}:[^ <>]*)>/i.exec(rest))) { const href = m[1], label = href.replace(/^mailto:/i, ''); put(`<a href="${esc(href)}">${esc(label)}</a>`); i += m[0].length; continue; }
     if ((m = /^<([A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+)>/.exec(rest))) { put(`<a href="mailto:${esc(m[1])}">${esc(m[1])}</a>`); i += m[0].length; continue; }
     const image = source[i] === '!' && source[i + 1] === '[';
     if (source[i] === '[' || image) {
