@@ -38,12 +38,23 @@ function inline(src, depth = 0) {
 }
 
 function blocks(input) {
-  const lines = input.replace(/\r\n?/g, '\n').replace(/\0/g, '�').split('\n');
+  const lines = input.replace(/\r\n?/g, '\n').replace(/\0/g, '�').split('\n').map(line => {
+    let col = 0, out = '';
+    for (const c of line) { if (c === '\t') { const n = 4 - col % 4; out += ' '.repeat(n); col += n; } else { out += c; col++; } }
+    return out;
+  });
+
   const html = []; let i = 0;
   const blank = n => /^\s*$/.test(lines[n] ?? '');
   while (i < lines.length) {
     if (blank(i)) { i++; continue; }
     let m, line = lines[i];
+    if (/^ {4}\S/.test(line)) {
+      const code = [];
+      while (i < lines.length && (/^ {4}/.test(lines[i]) || blank(i))) { code.push(/^ {4}/.test(lines[i]) ? lines[i].slice(4) : ''); i++; }
+      while (code.length && code.at(-1) === '') code.pop();
+      html.push(`<pre><code>${esc(code.join('\n') + (code.length ? '\n' : ''))}</code></pre>\n`); continue;
+    }
     if ((m = /^ {0,3}(`{3,}|~{3,})\s*([^\n]*)$/.exec(line))) {
       const fence = m[1], lang = m[2].trim().split(/\s+/)[0]; let body = []; i++;
       while (i < lines.length && !new RegExp('^ {0,3}' + fence[0] + '{' + fence.length + ',}\\s*$').test(lines[i])) body.push(lines[i++]);
