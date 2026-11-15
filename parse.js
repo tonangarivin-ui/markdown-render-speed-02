@@ -124,8 +124,10 @@ function inline(source, refs = Object.create(null), depth = 0) {
       }
       if (end >= 0) { let code = source.slice(i + n, end).replace(/\n/g, ' '); if (/^ .* $/.test(code) && /[^ ]/.test(code)) code = code.slice(1, -1); put(`<code>${esc(code)}</code>`); i = end + n; continue; }
     }
-    if ((m = /^&(?:#(?:x[\da-f]{1,6}|\d{1,7})|[A-Za-z0-9_]+);/i.exec(rest))) {
-      if (m[0][1] === '#') put(entity(m[0]));
+    if ((m = /^&(?:#(?:x[\da-f]+|\d+)|(?:[a-z][a-z\d]+));/i.exec(rest))) {
+      const key = m[0].slice(1, -1).toLowerCase();
+      if (key[0] === '#') text += entity(m[0]);
+      else if (key in named) text += named[key];
       else put(m[0]);
       i += m[0].length; continue;
     }
