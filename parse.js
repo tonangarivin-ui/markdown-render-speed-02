@@ -152,7 +152,7 @@ function inline(source, refs = Object.create(null), depth = 0) {
     }
     if ((m = /^~~(?=\S)([\s\S]*?\S)~~/.exec(rest))) { put(`<del>${inline(m[1], refs, depth + 1)}</del>`); i += m[0].length; continue; }
     if ((m = /^(?:https?:\/\/|www\.)[^\s<>]+/i.exec(rest))) { const raw = m[0], u = raw.replace(/[.,!?;:]+$/, ''), href = /^www\./i.test(u) ? `http://${u}` : u; put(`<a href="${esc(href)}">${esc(u)}</a>`); i += u.length; continue; }
-    text += esc(source[i++]);
+    text += source[i++];
   }
   return resolveEmphasis(text).replace(/(\d+)/g, (_, n) => slots[+n]);
 }
