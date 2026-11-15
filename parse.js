@@ -2,6 +2,8 @@ const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&
 const punct = c => !!c && /[\p{P}\p{S}]/u.test(c);
 const space = c => !c || /\s/u.test(c);
 const normalize = s => s.replace(/[\t\n ]+/g, ' ').trim().toLowerCase();
+const uri = s => encodeURI(s).replace(/%25([0-9A-F]{2})/gi, '%$1');
+const alt = s => s.replace(/`+([^`]*?)`+/g, '$1').replace(/[*!_~]/g, '').replace(/\n/g, ' ');
 
 // Numeric references are regular Unicode scalar values; named references are decoded by the browser
 // only when they remain in text, so retain unknown names literally.
@@ -10,20 +12,19 @@ const entity = s => s.replace(/&#(?:x[\da-f]+|\d+);/gi, m => {
   return x && x <= 0x10ffff && !(x >= 0xd800 && x <= 0xdfff) ? String.fromCodePoint(x) : '�';
 });
 
-function findClose(s, at, marker) {
+function findClose(s, at) {
   let depth = 0;
   for (let i = at; i < s.length; i++) {
     if (s[i] === '\\') { i++; continue; }
     if (s[i] === '(') depth++;
     else if (s[i] === ')') { if (!depth) return i; depth--; }
-    else if (/\s/.test(s[i]) && !depth) return -1;
   }
   return -1;
 }
 
 function destination(s) {
   s = s.trim();
-  if (s.startsWith('<') && s.endsWith('>') && !/[\n<>]/.test(s.slice(1, -1))) return s.slice(1, -1);
+  if (s.startsWith('<') && s.endsWith('>') && !/[\n<>\\]/.test(s.slice(1, -1))) return s.slice(1, -1);
   if (!s || /[\s<>]/.test(s)) return null;
   let d = 0;
   for (let i = 0; i < s.length; i++) { if (s[i] === '\\') i++; else if (s[i] === '(') d++; else if (s[i] === ')' && --d < 0) return null; }
@@ -80,8 +81,14 @@ function inline(source, refs = Object.create(null), depth = 0) {
     if ((m = /^ {2,}\n/.exec(rest))) { put('<br>'); i += m[0].length; continue; }
     if (source[i] === '`') {
       let n = 1; while (source[i + n] === '`') n++;
-      const end = source.indexOf('`'.repeat(n), i + n);
-      if (end >= 0 && source[end + n] !== '`') { let code = source.slice(i + n, end).replace(/\n/g, ' '); if (/^ .* $/.test(code) && /[^ ]/.test(code)) code = code.slice(1, -1); put(`<code>${esc(code)}</code>`); i = end + n; continue; }
+      let end = -1;
+      for (let j = i + n; j < source.length;) {
+        if (source[j] !== '`') { j++; continue; }
+        let k = j; while (source[k] === '`') k++;
+        if (k - j === n) { end = j; break; }
+        j = k;
+      }
+      if (end >= 0) { let code = source.slice(i + n, end).replace(/[\n ]+/g, ' '); if (/^ .* $/.test(code) && /[^ ]/.test(code)) code = code.slice(1, -1); put(`<code>${esc(code)}</code>`); i = end + n; continue; }
     }
     if ((m = /^&(?:#(?:x[\da-f]+|\d+)|(?:[a-z][a-z\d]+));/i.exec(rest))) { text += entity(m[0]); i += m[0].length; continue; }
     if ((m = /^<!--(?:[\s\S]*?)-->|^<\?[^]*?\?>|^<![A-Z]+(?:\s[^<>]*)?>|^<!\[CDATA\[[\s\S]*?\]\]>/.exec(rest)) || (m = /^<\/?[A-Za-z][A-Za-z0-9-]*(?:\s+[^<>]*?)?\s*\/?\s*>/.exec(rest))) { put(m[0]); i += m[0].length; continue; }
@@ -102,7 +109,7 @@ function inline(source, refs = Object.create(null), depth = 0) {
           if (source[end] === '[') { const r = source.indexOf(']', end + 1); if (r >= 0) { ref = source.slice(end + 1, r) || label; end = r + 1; } }
           const def = refs[normalize(ref)]; if (def) { url = def.url; title = def.title; }
         }
-        if (url !== undefined) { url = entity(url).replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/g, '$1'); const attr = title !== undefined ? ` title="${esc(entity(title))}"` : ''; put(image ? `<img src="${esc(url)}" alt="${esc(label.replace(/\n/g, ' '))}"${attr}>` : `<a href="${esc(url)}"${attr}>${inline(label, refs, depth + 1)}</a>`); i = end; continue; }
+        if (url != null) { url = uri(entity(url).replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/g, '$1')); const attr = title !== undefined ? ` title="${esc(entity(title))}"` : ''; put(image ? `<img src="${esc(url)}" alt="${esc(alt(label))}"${attr}>` : `<a href="${esc(url)}"${attr}>${inline(label, refs, depth + 1)}</a>`); i = end; continue; }
       }
     }
     if ((m = /^~~(?=\S)([\s\S]*?\S)~~/.exec(rest))) { put(`<del>${inline(m[1], refs, depth + 1)}</del>`); i += m[0].length; continue; }
@@ -113,13 +120,14 @@ function inline(source, refs = Object.create(null), depth = 0) {
 }
 
 function htmlBlockStart(line) {
+  const special = /^ {0,3}<(script|pre|style|textarea)(?:\s|>|$)/i.exec(line);
+  if (special) return new RegExp(`</${special[1]}\\s*>`, 'i');
   if (/^ {0,3}<!--/.test(line)) return /-->/;
   if (/^ {0,3}<\?/.test(line)) return /\?>/;
   if (/^ {0,3}<!\[CDATA\[/.test(line)) return /\]\]>/;
-  if (/^ {0,3}<!(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|ol|p|pre|script|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)(?:\s|\/?>|$)/i.test(line)) return null;
-  if (/^ {0,3}<\/?(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|ol|p|pre|script|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)(?:\s|\/?>|$)/i.test(line)) return /^$/;
-  if (/^ {0,3}<(?:script|pre|style|textarea)(?:\s|>|$)/i.test(line)) return new RegExp('</' + line.match(/^ {0,3}<([a-z]+)/i)[1] + '>', 'i');
-  if (/^ {0,3}<!(?:[A-Z]|\[CDATA\[)/.test(line)) return /^$/;
+  if (/^ {0,3}<![A-Z]/.test(line)) return />/;
+  if (/^ {0,3}<\/?(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|ol|p|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)(?:\s|\/?>|$)/i.test(line)) return /^$/;
+  if (/^ {0,3}<\/?[A-Za-z][A-Za-z0-9-]*(?:\s+[^<>]*)?\/?>\s*$/.test(line)) return /^$/;
   return false;
 }
 
@@ -139,6 +147,16 @@ function blocks(input, shared) {
     if ((m = /^ {0,3}(#{1,6})(?:[ \t]+(.*?)\s*|[ \t]*)$/.exec(line))) { html.push(`<h${m[1].length}>${inline((m[2] ?? '').replace(/[ \t]+#+[ \t]*$/, ''), refs)}</h${m[1].length}>\n`); i++; continue; }
     if (/^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/.test(line)) { html.push('<hr>\n'); i++; continue; }
     if (/^ {0,3}>/.test(line)) { const b = []; while (i < lines.length && (/^ {0,3}>/.test(lines[i]) || (blank(i) && /^ {0,3}>/.test(lines[i + 1] ?? '')))) b.push(/^ {0,3}> ?/.test(lines[i]) ? lines[i].replace(/^ {0,3}> ?/, '') : ''), i++; html.push(`<blockquote>\n${blocks(b.join('\n'), refs)}</blockquote>\n`); continue; }
+    const cells = s => s.trim().replace(/^\||\|$/g, '').split(/(?<!\\)\|/).map(x => x.trim().replace(/\\\|/g, '|'));
+    if (i + 1 < lines.length && line.includes('|') && /^(?:\s*\|?\s*:?-+:?\s*)+(?:\|\s*:?-+:?\s*)+\|?\s*$/.test(lines[i + 1])) {
+      const head = cells(line), defs = cells(lines[i + 1]);
+      if (head.length === defs.length) {
+        const align = defs.map(x => /^:.*:$/.test(x) ? 'center' : /^:/.test(x) ? 'left' : /:$/.test(x) ? 'right' : '');
+        const row = (xs, tag) => `<tr>\n${head.map((_, n) => `<${tag}${align[n] ? ` align="${align[n]}"` : ''}>${inline(xs[n] ?? '', refs)}</${tag}>`).join('\n')}\n</tr>`;
+        const rows = []; i += 2; while (i < lines.length && lines[i].includes('|') && !blank(i)) rows.push(row(cells(lines[i++]), 'td'));
+        html.push(`<table>\n<thead>\n${row(head, 'th')}\n</thead>\n<tbody>${rows.join('\n')}\n</tbody></table>\n`); continue;
+      }
+    }
     if ((m = /^( {0,3})([*+-]|\d{1,9}[.)])([ \t]+)(.*)$/.exec(line))) {
       const ordered = /^\d/.test(m[2]), tag = ordered ? 'ol' : 'ul', start = ordered ? +m[2] : 1, items = [];
       let loose = false;
