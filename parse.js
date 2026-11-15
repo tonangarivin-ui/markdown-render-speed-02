@@ -1,100 +1,184 @@
 const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const entities = s => s.replace(/&(#(?:x[\da-f]+|\d+)|[a-z][a-z\d]+);/gi, (m, n) => {
-  if (n[0] !== '#') return m;
-  const x = n[1]?.toLowerCase() === 'x' ? parseInt(n.slice(2), 16) : +n.slice(1);
-  return Number.isFinite(x) && x > 0 && x <= 0x10ffff ? String.fromCodePoint(x) : '�';
+const punct = c => !!c && /[\p{P}\p{S}]/u.test(c);
+const space = c => !c || /\s/u.test(c);
+const normalize = s => s.replace(/[\t\n ]+/g, ' ').trim().toLowerCase();
+
+// Numeric references are regular Unicode scalar values; named references are decoded by the browser
+// only when they remain in text, so retain unknown names literally.
+const entity = s => s.replace(/&#(?:x[\da-f]+|\d+);/gi, m => {
+  const n = m.slice(2, -1), x = n[0].toLowerCase() === 'x' ? parseInt(n.slice(1), 16) : +n;
+  return x && x <= 0x10ffff && !(x >= 0xd800 && x <= 0xdfff) ? String.fromCodePoint(x) : '�';
 });
 
-function inline(src, depth = 0) {
-  if (depth > 12) return esc(src);
-  let out = '', i = 0;
-  while (i < src.length) {
-    const rest = src.slice(i);
-    let m;
-    if ((m = /^\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/.exec(rest))) { out += esc(m[1]); i += m[0].length; continue; }
-    if ((m = /^\\\n/.exec(rest))) { out += '<br>'; i++; continue; }
-    if ((m = /^ {2,}\n/.exec(rest))) { out += '<br>'; i += m[0].length; continue; }
-    if ((m = /^(`+)([\s\S]*?)\1(?!`)/.exec(rest))) {
-      let text = m[2].replace(/\n/g, ' ');
-      if (/^ .* $/.test(text) && /[^ ]/.test(text)) text = text.slice(1, -1);
-      out += '<code>' + esc(text) + '</code>'; i += m[0].length; continue;
+function findClose(s, at, marker) {
+  let depth = 0;
+  for (let i = at; i < s.length; i++) {
+    if (s[i] === '\\') { i++; continue; }
+    if (s[i] === '(') depth++;
+    else if (s[i] === ')') { if (!depth) return i; depth--; }
+    else if (/\s/.test(s[i]) && !depth) return -1;
+  }
+  return -1;
+}
+
+function destination(s) {
+  s = s.trim();
+  if (s.startsWith('<') && s.endsWith('>') && !/[\n<>]/.test(s.slice(1, -1))) return s.slice(1, -1);
+  if (!s || /[\s<>]/.test(s)) return null;
+  let d = 0;
+  for (let i = 0; i < s.length; i++) { if (s[i] === '\\') i++; else if (s[i] === '(') d++; else if (s[i] === ')' && --d < 0) return null; }
+  return d ? null : s;
+}
+
+function resolveEmphasis(s) {
+  const ds = [], opens = new Map(), closes = new Map(), used = new Set();
+  for (let i = 0; i < s.length;) {
+    if (s[i] !== '*' && s[i] !== '_') { i++; continue; }
+    const start = i, ch = s[i]; while (s[i] === ch) i++;
+    const before = s[start - 1], after = s[i];
+    const left = !space(after) && (!punct(after) || space(before) || punct(before));
+    const right = !space(before) && (!punct(before) || space(after) || punct(after));
+    ds.push({ start, end: i, ch, n: i - start, left: i - start, right: 0, open: left && (ch === '*' || !right || punct(before)), close: right && (ch === '*' || !left || punct(after)) });
+  }
+  const add = (map, at, value) => map.set(at, [...(map.get(at) ?? []), value]);
+  for (let c = 0; c < ds.length; c++) {
+    const close = ds[c];
+    while (close.close && close.n) {
+      let open;
+      for (let o = c - 1; o >= 0; o--) {
+        const candidate = ds[o];
+        if (!candidate.open || candidate.ch !== close.ch || !candidate.n) continue;
+        if ((candidate.close || close.open) && (candidate.n + close.n) % 3 === 0 && (candidate.n % 3 || close.n % 3)) continue;
+        open = candidate; break;
+      }
+      if (!open) break;
+      const n = open.n >= 2 && close.n >= 2 ? 2 : 1;
+      const a = open.start + open.n - n, b = close.start + close.right;
+      add(opens, a, n); add(closes, b + n, n);
+      for (let x = 0; x < n; x++) { used.add(a + x); used.add(b + x); }
+      open.n -= n; close.n -= n; close.right += n;
     }
-    if ((m = /^&(?:#(?:x[\da-f]+|\d+)|[a-z][a-z\d]+);/i.exec(rest))) { out += entities(m[0]).replace(/</g, '&lt;').replace(/>/g, '&gt;'); i += m[0].length; continue; }
-    if ((m = /^<((?:https?:\/\/|mailto:)[^ <>]*)>/.exec(rest))) { const u = m[1]; out += `<a href="${esc(u)}">${esc(u.replace(/^mailto:/, ''))}</a>`; i += m[0].length; continue; }
-    if ((m = /^<([\w.+-]+@[\w.-]+\.[A-Za-z]{2,})>/.exec(rest))) { out += `<a href="mailto:${esc(m[1])}">${esc(m[1])}</a>`; i += m[0].length; continue; }
-    if ((m = /^<([A-Za-z][A-Za-z0-9-]*)(?:\s+[^<>]*?)?\s*\/?\s*>/.exec(rest)) || (m = /^<\/([A-Za-z][A-Za-z0-9-]*)\s*>/.exec(rest))) { out += m[0]; i += m[0].length; continue; }
-    if ((m = /^!?\[([^\]]*)\]\((<[^>]*>|[^()\s]*(?:\([^()]*\)[^()\s]*)*)(?:\s+["']([^"']*)["'])?\)/.exec(rest))) {
-      const image = m[0][0] === '!'; const href = m[2].replace(/^<|>$/g, '').replace(/\\([()])/g, '$1');
-      out += image ? `<img src="${esc(href)}" alt="${esc(m[1])}"${m[3] ? ` title="${esc(m[3])}"` : ''}>` : `<a href="${esc(href)}"${m[3] ? ` title="${esc(m[3])}"` : ''}>${inline(m[1], depth + 1)}</a>`;
-      i += m[0].length; continue;
-    }
-    if ((m = /^~~(?=\S)([\s\S]*?\S)~~/.exec(rest))) { out += `<del>${inline(m[1], depth + 1)}</del>`; i += m[0].length; continue; }
-    if ((m = /^\*\*(?=\S)([\s\S]*?\S)\*\*/.exec(rest)) || (m = /^__(?=\S)([\s\S]*?\S)__/.exec(rest))) { out += `<strong>${inline(m[1], depth + 1)}</strong>`; i += m[0].length; continue; }
-    if ((m = /^\*(?=\S)([\s\S]*?\S)\*/.exec(rest)) || (m = /^_(?=\S)([\s\S]*?\S)_/.exec(rest))) { out += `<em>${inline(m[1], depth + 1)}</em>`; i += m[0].length; continue; }
-    if ((m = /^https?:\/\/[^\s<>]+/.exec(rest))) { const u = m[0].replace(/[.,!?;:]+$/, ''); out += `<a href="${esc(u)}">${esc(u)}</a>`; i += u.length; continue; }
-    const cp = String.fromCodePoint(src.codePointAt(i)); out += esc(cp); i += cp.length;
+  }
+  let out = '';
+  for (let i = 0; i <= s.length; i++) {
+    for (const n of closes.get(i) ?? []) out += n === 2 ? '</strong>' : '</em>';
+    for (const n of opens.get(i) ?? []) out += n === 2 ? '<strong>' : '<em>';
+    if (i < s.length && !used.has(i)) out += esc(s[i]);
   }
   return out;
 }
 
-function blocks(input) {
-  const lines = input.replace(/\r\n?/g, '\n').replace(/\0/g, '�').split('\n').map(line => {
-    let col = 0, out = '';
-    for (const c of line) { if (c === '\t') { const n = 4 - col % 4; out += ' '.repeat(n); col += n; } else { out += c; col++; } }
-    return out;
-  });
-
-  const html = []; let i = 0;
-  const blank = n => /^\s*$/.test(lines[n] ?? '');
-  while (i < lines.length) {
-    if (blank(i)) { i++; continue; }
-    let m, line = lines[i];
-    if (/^ {4}\S/.test(line)) {
-      const code = [];
-      while (i < lines.length && (/^ {4}/.test(lines[i]) || blank(i))) { code.push(/^ {4}/.test(lines[i]) ? lines[i].slice(4) : ''); i++; }
-      while (code.length && code.at(-1) === '') code.pop();
-      html.push(`<pre><code>${esc(code.join('\n') + (code.length ? '\n' : ''))}</code></pre>\n`); continue;
+function inline(source, refs = Object.create(null), depth = 0) {
+  if (depth > 32) return esc(source);
+  const slots = [], slot = value => `${slots.push(value) - 1}`;
+  let text = '', i = 0;
+  const put = value => { text += slot(value); };
+  while (i < source.length) {
+    const rest = source.slice(i); let m;
+    if ((m = /^\\\n/.exec(rest))) { put('<br>'); i += 2; continue; }
+    if ((m = /^\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/.exec(rest))) { put(esc(m[1])); i += m[0].length; continue; }
+    if ((m = /^ {2,}\n/.exec(rest))) { put('<br>'); i += m[0].length; continue; }
+    if (source[i] === '`') {
+      let n = 1; while (source[i + n] === '`') n++;
+      const end = source.indexOf('`'.repeat(n), i + n);
+      if (end >= 0 && source[end + n] !== '`') { let code = source.slice(i + n, end).replace(/\n/g, ' '); if (/^ .* $/.test(code) && /[^ ]/.test(code)) code = code.slice(1, -1); put(`<code>${esc(code)}</code>`); i = end + n; continue; }
     }
-    if ((m = /^ {0,3}(`{3,}|~{3,})\s*([^\n]*)$/.exec(line))) {
-      const fence = m[1], lang = m[2].trim().split(/\s+/)[0]; let body = []; i++;
-      while (i < lines.length && !new RegExp('^ {0,3}' + fence[0] + '{' + fence.length + ',}\\s*$').test(lines[i])) body.push(lines[i++]);
-      if (i < lines.length) i++;
-      html.push(`<pre><code${lang ? ` class="language-${esc(lang)}"` : ''}>${esc(body.join('\n') + (body.length ? '\n' : ''))}</code></pre>\n`); continue;
-    }
-    if ((m = /^( {0,3})(#{1,6})(?:[ \t]+|$)(.*)$/.exec(line))) {
-      const content = m[3].replace(/[ \t]+#+[ \t]*$/, '').trim(); const n = m[2].length;
-      html.push(`<h${n}>${inline(content)}</h${n}>\n`); i++; continue;
-    }
-    if (/^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/.test(line)) { html.push('<hr>\n'); i++; continue; }
-    if (/^ {0,3}>/.test(line)) {
-      const q = []; while (i < lines.length && /^ {0,3}>/.test(lines[i])) q.push(lines[i++].replace(/^ {0,3}> ?/, ''));
-      html.push(`<blockquote>\n${blocks(q.join('\n')).replace(/\n$/, '')}\n</blockquote>\n`); continue;
-    }
-    if ((m = /^( {0,3})([*+-]|\d+[.)])[ \t]+(.*)$/.exec(line))) {
-      const ordered = /^\d/.test(m[2]), start = ordered ? parseInt(m[2], 10) : 1, tag = ordered ? 'ol' : 'ul'; const items = [];
-      while (i < lines.length) {
-        const x = /^( {0,3})([*+-]|\d+[.)])[ \t]+(.*)$/.exec(lines[i]); if (!x || /^\d/.test(x[2]) !== ordered) break;
-        let content = [x[3]]; i++;
-        while (i < lines.length && (/^(?: {2,}\S|\t)/.test(lines[i]) || (blank(i) && i + 1 < lines.length && /^(?: {2,}\S|\t)/.test(lines[i + 1])))) { if (!blank(i)) content.push(lines[i].replace(/^(?: {2,}|\t)/, '')); i++; }
-        const task = /^\[([ xX])\][ \t]+/.exec(content[0]); let checkbox = '';
-        if (task) { checkbox = `<input${task[1].toLowerCase() === 'x' ? ' checked=""' : ''} disabled="" type="checkbox"> `; content[0] = content[0].slice(task[0].length); }
-        let rendered = blocks(content.join('\n')).trimEnd();
-        if (rendered.startsWith('<p>') && rendered.endsWith('</p>\n')) rendered = rendered.slice(3, -5);
-        items.push(`<li>${checkbox}${rendered}</li>`);
+    if ((m = /^&(?:#(?:x[\da-f]+|\d+)|(?:[a-z][a-z\d]+));/i.exec(rest))) { text += entity(m[0]); i += m[0].length; continue; }
+    if ((m = /^<!--(?:[\s\S]*?)-->|^<\?[^]*?\?>|^<![A-Z]+(?:\s[^<>]*)?>|^<!\[CDATA\[[\s\S]*?\]\]>/.exec(rest)) || (m = /^<\/?[A-Za-z][A-Za-z0-9-]*(?:\s+[^<>]*?)?\s*\/?\s*>/.exec(rest))) { put(m[0]); i += m[0].length; continue; }
+    if ((m = /^<([A-Za-z][A-Za-z+.-]{1,31}:[^ <>]*)>/.exec(rest))) { const href = m[1], label = href.replace(/^mailto:/i, ''); put(`<a href="${esc(href)}">${esc(label)}</a>`); i += m[0].length; continue; }
+    if ((m = /^<([A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+)>/.exec(rest))) { put(`<a href="mailto:${esc(m[1])}">${esc(m[1])}</a>`); i += m[0].length; continue; }
+    const image = source[i] === '!' && source[i + 1] === '[';
+    if (source[i] === '[' || image) {
+      const begin = i + (image ? 2 : 1), close = source.indexOf(']', begin);
+      if (close >= 0) {
+        const label = source.slice(begin, close); let end = close + 1, url, title;
+        if (source[end] === '(') {
+          const stop = findClose(source, end + 1); if (stop >= 0) {
+            const body = source.slice(end + 1, stop); const tm = /^(<[^>\n]*>|[^\s]+?)(?:\s+(?:"([\s\S]*)"|'([\s\S]*)'|\(([\s\S]*)\)))?\s*$/.exec(body);
+            if (tm && (url = destination(tm[1])) !== null) { title = tm[2] ?? tm[3] ?? tm[4]; end = stop + 1; }
+          }
+        } else {
+          let ref = label;
+          if (source[end] === '[') { const r = source.indexOf(']', end + 1); if (r >= 0) { ref = source.slice(end + 1, r) || label; end = r + 1; } }
+          const def = refs[normalize(ref)]; if (def) { url = def.url; title = def.title; }
+        }
+        if (url !== undefined) { url = entity(url).replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/g, '$1'); const attr = title !== undefined ? ` title="${esc(entity(title))}"` : ''; put(image ? `<img src="${esc(url)}" alt="${esc(label.replace(/\n/g, ' '))}"${attr}>` : `<a href="${esc(url)}"${attr}>${inline(label, refs, depth + 1)}</a>`); i = end; continue; }
       }
-      html.push(`<${tag}${ordered && start !== 1 ? ` start="${start}"` : ''}>\n${items.join('\n')}\n</${tag}>\n`); continue;
     }
-    if ((m = /^ {0,3}(`{3,}|~{3,})/.exec(line))) continue;
+    if ((m = /^~~(?=\S)([\s\S]*?\S)~~/.exec(rest))) { put(`<del>${inline(m[1], refs, depth + 1)}</del>`); i += m[0].length; continue; }
+    if ((m = /^(?:https?:\/\/|www\.)[^\s<>]+/i.exec(rest))) { const raw = m[0], u = raw.replace(/[.,!?;:]+$/, ''), href = /^www\./i.test(u) ? `http://${u}` : u; put(`<a href="${esc(href)}">${esc(u)}</a>`); i += u.length; continue; }
+    text += esc(source[i++]);
+  }
+  return resolveEmphasis(text).replace(/(\d+)/g, (_, n) => slots[+n]);
+}
+
+function htmlBlockStart(line) {
+  if (/^ {0,3}<!--/.test(line)) return /-->/;
+  if (/^ {0,3}<\?/.test(line)) return /\?>/;
+  if (/^ {0,3}<!\[CDATA\[/.test(line)) return /\]\]>/;
+  if (/^ {0,3}<!(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|ol|p|pre|script|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)(?:\s|\/?>|$)/i.test(line)) return null;
+  if (/^ {0,3}<\/?(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|ol|p|pre|script|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)(?:\s|\/?>|$)/i.test(line)) return /^$/;
+  if (/^ {0,3}<(?:script|pre|style|textarea)(?:\s|>|$)/i.test(line)) return new RegExp('</' + line.match(/^ {0,3}<([a-z]+)/i)[1] + '>', 'i');
+  if (/^ {0,3}<!(?:[A-Z]|\[CDATA\[)/.test(line)) return /^$/;
+  return false;
+}
+
+function blocks(input, shared) {
+  const lines = input.replace(/\r\n?/g, '\n').replace(/\0/g, '�').split('\n').map(line => {
+    let col = 0, out = ''; for (const c of line) { if (c === '\t') { const n = 4 - col % 4; out += ' '.repeat(n); col += n; } else { out += c; col++; } } return out;
+  });
+  const refs = shared ?? Object.create(null);
+  for (let n = 0; n < lines.length; n++) { const d = /^ {0,3}\[([^\]]*(?:\n[ \t]*[^\]]+)*)\]:\s*(<[^>\n]*>|\S+)(?:\s+(?:"([^\n"]*)"|'([^\n']*)'|\(([^\n)]*)\)))?\s*$/.exec(lines[n]); if (d) { const u = destination(d[2]); if (u !== null) refs[normalize(d[1])] = { url: u, title: d[3] ?? d[4] ?? d[5] }; lines[n] = ''; } }
+  const html = [], blank = n => /^\s*$/.test(lines[n] ?? ''); let i = 0;
+  while (i < lines.length) {
+    if (blank(i)) { i++; continue; } let line = lines[i], m;
+    const endHTML = htmlBlockStart(line);
+    if (endHTML !== false) { const b = [line]; i++; while (i < lines.length && !endHTML.test(b.join('\n')) && !(endHTML.source === '^$' && blank(i))) b.push(lines[i++]); if (i < lines.length && endHTML.source === '^$' && blank(i)) {} html.push(b.join('\n') + '\n'); continue; }
+    if (/^ {4}/.test(line)) { const b = []; while (i < lines.length && (/^ {4}/.test(lines[i]) || blank(i))) { b.push(/^ {4}/.test(lines[i]) ? lines[i].slice(4) : ''); i++; } while (b.at(-1) === '') b.pop(); html.push(`<pre><code>${esc(b.join('\n'))}\n</code></pre>\n`); continue; }
+    if ((m = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line))) { const fence = m[1], info = m[2].trim().split(/\s+/)[0], b = []; i++; const closer = new RegExp(`^ {0,3}${fence[0]}{${fence.length},}[ \\t]*$`); while (i < lines.length && !closer.test(lines[i])) b.push(lines[i++]); if (i < lines.length) i++; html.push(`<pre><code${info ? ` class="language-${esc(info)}"` : ''}>${esc(b.join('\n'))}${b.length ? '\n' : ''}</code></pre>\n`); continue; }
+    if ((m = /^ {0,3}(#{1,6})(?:[ \t]+(.*?)\s*|[ \t]*)$/.exec(line))) { html.push(`<h${m[1].length}>${inline((m[2] ?? '').replace(/[ \t]+#+[ \t]*$/, ''), refs)}</h${m[1].length}>\n`); i++; continue; }
+    if (/^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/.test(line)) { html.push('<hr>\n'); i++; continue; }
+    if (/^ {0,3}>/.test(line)) { const b = []; while (i < lines.length && (/^ {0,3}>/.test(lines[i]) || (blank(i) && /^ {0,3}>/.test(lines[i + 1] ?? '')))) b.push(/^ {0,3}> ?/.test(lines[i]) ? lines[i].replace(/^ {0,3}> ?/, '') : ''), i++; html.push(`<blockquote>\n${blocks(b.join('\n'), refs)}</blockquote>\n`); continue; }
+    if ((m = /^( {0,3})([*+-]|\d{1,9}[.)])([ \t]+)(.*)$/.exec(line))) {
+      const ordered = /^\d/.test(m[2]), tag = ordered ? 'ol' : 'ul', start = ordered ? +m[2] : 1, items = [];
+      let loose = false;
+      while (i < lines.length) {
+        const item = /^( {0,3})([*+-]|\d{1,9}[.)])([ \t]+)(.*)$/.exec(lines[i]);
+        if (!item || /^\d/.test(item[2]) !== ordered) break;
+        const marker = item[1].length + item[2].length, pad = item[3].replace(/\t/g, '    ').length;
+        const indent = pad > 4 ? marker + 1 : marker + pad, body = [item[4]]; let sawBlank = false; i++;
+        while (i < lines.length) {
+          if (blank(i)) {
+            const next = lines[i + 1] ?? '';
+            if (/^( {0,3})([*+-]|\d{1,9}[.)])[ \t]+/.test(next) || (next.match(/^ */) ?? [''])[0].length >= indent) sawBlank = true;
+            body.push(''); i++; continue;
+          }
+          if (/^( {0,3})([*+-]|\d{1,9}[.)])[ \t]+/.test(lines[i])) break;
+          const lead = (lines[i].match(/^ */) ?? [''])[0].length;
+          if (lead >= indent) body.push(lines[i].slice(indent));
+          else if (!sawBlank) body.push(lines[i]);
+          else break;
+          i++;
+        }
+        if (sawBlank) loose = true;
+        while (body.at(-1) === '') body.pop();
+        let first = body[0] ?? '', check = '';
+        const task = /^\[([ xX])\][ \t]+/.exec(first);
+        if (task) { check = `<input${task[1].toLowerCase() === 'x' ? ' checked=""' : ''} disabled="" type="checkbox"> `; body[0] = first.slice(task[0].length); }
+        items.push({ check, body });
+      }
+      const rendered = items.map(({ check, body }) => {
+        let value = blocks(body.join('\n'), refs);
+        if (!loose && /^<p>[\s\S]*<\/p>\n$/.test(value)) value = value.slice(3, -5);
+        return `<li>${check}${value}</li>`;
+      });
+      html.push(`<${tag}${ordered && start !== 1 ? ` start="${start}"` : ''}>\n${rendered.join('\n')}\n</${tag}>\n`); continue;
+    }
     const para = [line.trim()]; i++;
-    while (i < lines.length && !blank(i) && !/^( {0,3})(#{1,6})(?:[ \t]+|$)/.test(lines[i]) && !/^ {0,3}>/.test(lines[i]) && !/^( {0,3})([*+-]|\d+[.)])[ \t]+/.test(lines[i]) && !/^ {0,3}(?:`{3,}|~{3,})/.test(lines[i])) {
-      if (/^ {0,3}(?:=+|-+)[ \t]*$/.test(lines[i])) { const n = lines[i].trim()[0] === '=' ? 1 : 2; html.push(`<h${n}>${inline(para.join('\n'))}</h${n}>\n`); i++; break; }
-      para.push(lines[i++].trim());
-    }
-    if (!html.at(-1)?.startsWith('<h') || i === lines.length || blank(i) || !/^ {0,3}(?:=+|-+)[ \t]*$/.test(lines[i] ?? '')) html.push(`<p>${inline(para.join('\n'))}</p>\n`);
+    while (i < lines.length && !blank(i) && !/^( {0,3}(?:#{1,6})(?:[ \t]|$)| {0,3}>| {0,3}(?:[*+-]|\d+[.)])[ \t]+| {0,3}(?:`{3,}|~{3,}))/.test(lines[i])) { if (/^ {0,3}(?:=+|-+)[ \t]*$/.test(lines[i])) { const level = lines[i].trim()[0] === '=' ? 1 : 2; html.push(`<h${level}>${inline(para.join('\n'), refs)}</h${level}>\n`); i++; para.length = 0; break; } para.push(lines[i++].trim()); }
+    if (para.length) html.push(`<p>${inline(para.join('\n'), refs)}</p>\n`);
   }
   return html.join('');
 }
 
-export function parse(markdown) {
-  return blocks(String(markdown));
-}
+export function parse(markdown) { return blocks(String(markdown)); }
