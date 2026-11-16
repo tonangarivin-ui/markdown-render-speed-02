@@ -254,7 +254,21 @@ function blocks(input, shared, tight = null, spacing) {
   const rawLines = input.replace(/\r\n?/g, '\n').replace(/\0/g, '�').split('\n');
   const lines = rawLines.map(detab);
   const refs = shared ?? Object.create(null), definitions = new Set();
-  for (let n = 0; n < lines.length;) { const d = definition(lines, n); if (!d) { n++; continue; } definitions.add(n); refs[normalize(d.label)] ??= { url: d.url, title: d.title }; lines.splice(n, d.used, ...Array(d.used).fill('')); n += d.used; }
+  let fenced;
+  for (let n = 0; n < lines.length;) {
+    const fence = /^ {0,3}(`{3,}|~{3,})/.exec(lines[n]);
+    if (fence) { fenced = fenced ? undefined : fence[1]; n++; continue; }
+    if (fenced || (n && !/^\s*$/.test(lines[n - 1]))) { n++; continue; }
+    let d = definition(lines, n), quoted = false;
+    if (!d && /^ {0,3}> ?\[/.test(lines[n])) {
+      const content = lines[n].replace(/^ {0,3}> ?/, '');
+      d = definition([content], 0); quoted = !!d;
+    }
+    if (!d) { n++; continue; }
+    definitions.add(n); refs[normalize(d.label)] ??= { url: d.url, title: d.title };
+    if (quoted) lines[n] = '>'; else lines.splice(n, d.used, ...Array(d.used).fill(''));
+    n += d.used;
+  }
   const html = [], blank = n => /^\s*$/.test(lines[n] ?? ''); let i = 0;
   while (i < lines.length) {
     if (blank(i)) { if (spacing && html.length && (definitions.has(i) || lines.slice(i).some(s => /\S/.test(s)))) spacing.separated = true; i++; continue; } let line = lines[i], m;
