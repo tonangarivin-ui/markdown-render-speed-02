@@ -164,7 +164,7 @@ function inline(source, refs = Object.create(null), depth = 0) {
           if (source[end] === '[') { const r = labelClose(source, end + 1); if (r >= 0) { ref = source.slice(end + 1, r) || label; end = r + 1; } }
           const def = refs[normalize(ref)]; if (def) { url = def.url; title = def.title; }
         }
-        if (url != null) { url = uri(entity(url).replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/g, '$1')); const attr = title !== undefined ? ` title="${esc(entity(title).replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/g, '$1'))}"` : ''; const body = inline(label, refs, depth + 1); put(image ? `<img src="${esc(url)}" alt="${esc(alt(body.replace(/<[^>]*>/g, '')))}"${attr}>` : `<a href="${esc(url)}"${attr}>${body}</a>`); i = end; continue; }
+        if (url != null) { url = uri(entity(url).replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/g, '$1')); const attr = title !== undefined ? ` title="${esc(entity(title).replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/g, '$1'))}"` : ''; const body = inline(label, refs, depth + 1); if (!image && /<a\s/i.test(body)) { text += source[i++]; continue; } put(image ? `<img src="${esc(url)}" alt="${esc(alt(body.replace(/<[^>]*>/g, '')))}"${attr}>` : `<a href="${esc(url)}"${attr}>${body}</a>`); i = end; continue; }
       }
     }
     if ((m = /^(~{1,2})(?!~)(?=\S)([\s\S]*?\S)(?<!~)\1(?!~)/.exec(rest))) { put(`<del>${inline(m[2], refs, depth + 1)}</del>`); i += m[0].length; continue; }
