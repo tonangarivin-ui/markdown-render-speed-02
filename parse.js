@@ -141,10 +141,11 @@ function inline(source, refs = Object.create(null), depth = 0) {
         if (k - j === n) { end = j; break; }
         j = k;
       }
-      if (end >= 0) { let code = source.slice(i + n, end).replace(/\n/g, ' '); if (/^ .* $/.test(code) && /[^ ]/.test(code)) code = code.slice(1, -1); put(`<code>${codeEsc(code)}</code>`); i = end + n; continue; }
+      if (end >= 0) { let code = entity(source.slice(i + n, end).replace(/\n/g, ' ')); if (/^ .* $/.test(code) && /[^ ]/.test(code)) code = code.slice(1, -1); put(`<code>${codeEsc(code)}</code>`); i = end + n; continue; }
+      text += source.slice(i, i + n); i += n; continue;
     }
     if ((m = /^&#(?:[xX][\da-fA-F]{1,6}|\d{1,7});/.exec(rest))) {
-      text += entity(m[0]); i += m[0].length; continue;
+      put(esc(entity(m[0]))); i += m[0].length; continue;
     }
     if ((m = /^&[A-Za-z0-9_]+;/.exec(rest))) {
       put(m[0]); i += m[0].length; continue;
