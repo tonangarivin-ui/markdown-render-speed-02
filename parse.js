@@ -227,7 +227,10 @@ function blocks(input, shared) {
     if (endHTML !== false) { const b = [line]; i++; while (i < lines.length && !endHTML.test(b.join('\n')) && !(endHTML.source === '^$' && blank(i))) b.push(lines[i++]); const boundary = endHTML.source === '^$' && blank(i); html.push(b.join('\n') + (!boundary || i === lines.length - 1 ? '\n' : '')); continue; }
     if (/^ {4}/.test(line)) { const b = []; while (i < lines.length && (/^ {4}/.test(lines[i]) || blank(i))) { b.push(/^ {4}/.test(lines[i]) ? lines[i].slice(4) : ''); i++; } while (b.at(-1) === '') b.pop(); html.push(`<pre><code>${esc(b.join('\n'))}\n</code></pre>\n`); continue; }
     if ((m = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line))) { const fence = m[1], info = m[2].trim().split(/\s+/)[0], b = []; i++; const closer = new RegExp(`^ {0,3}${fence[0]}{${fence.length},}[ \\t]*$`); while (i < lines.length && !closer.test(lines[i])) b.push(lines[i++]); if (i < lines.length) i++; html.push(`<pre><code${info ? ` class="language-${esc(info)}"` : ''}>${esc(b.join('\n'))}${b.length ? '\n' : ''}</code></pre>\n`); continue; }
-    if ((m = /^ {0,3}(#{1,6})(?:[ \t]+(.*?)\s*|[ \t]*)$/.exec(line))) { html.push(`<h${m[1].length}>${inline((m[2] ?? '').replace(/[ \t]+#+[ \t]*$/, ''), refs)}</h${m[1].length}>\n`); i++; continue; }
+    if ((m = /^ {0,3}(#{1,6})(?:[ \t]+(.*?)[ \t]*|[ \t]*)$/.exec(line))) {
+      const body = (m[2] ?? '').replace(/[ \t]+#+[ \t]*$/, '').replace(/^#+[ \t]*$/, '');
+      html.push(`<h${m[1].length}>${inline(body, refs)}</h${m[1].length}>\n`); i++; continue;
+    }
     if (/^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/.test(line)) { html.push('<hr>\n'); i++; continue; }
     if (/^ {0,3}>/.test(line)) { const b = []; while (i < lines.length && (/^ {0,3}>/.test(lines[i]) || (blank(i) && /^ {0,3}>/.test(lines[i + 1] ?? '')))) b.push(/^ {0,3}> ?/.test(lines[i]) ? lines[i].replace(/^ {0,3}> ?/, '') : ''), i++; html.push(`<blockquote>\n${blocks(b.join('\n'), refs)}</blockquote>\n`); continue; }
     const cells = s => s.trim().replace(/^\||\|$/g, '').split(/(?<!\\)\|/).map(x => x.trim().replace(/\\\|/g, '|'));
