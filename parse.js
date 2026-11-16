@@ -208,16 +208,19 @@ function definition(lines, at) {
     if (depth) return null;
     url = source.slice(start, i);
   }
-  while (/\s/.test(source[i])) i++;
+  const urlEnd = i;
+  while (/[ \t]/.test(source[i])) i++;
+  const lineEnd = i;
+  if (source[i] === '\n') { i++; while (/[ \t]/.test(source[i])) i++; }
   let title;
-  if (source[i] === '"' || source[i] === "'" || source[i] === '(') {
+  if (i > urlEnd && (source[i] === '"' || source[i] === "'" || source[i] === '(')) {
     const open = source[i++], close = open === '(' ? ')' : open, start = i;
     while (i < source.length && (source[i] !== close || source[i - 1] === '\\')) i++;
-    if (source[i] !== close) return null;
-    title = source.slice(start, i++);
-    while (/[ \t\n]/.test(source[i])) i++;
-  }
-  return i === source.length ? { label, url, title, used } : null;
+    if (source[i] === close) { title = source.slice(start, i++); while (/[ \t]/.test(source[i])) i++; }
+    if (title === undefined || (i !== source.length && source[i] !== '\n')) { if (source[lineEnd] !== '\n') return null; title = undefined; i = lineEnd; }
+  } else i = lineEnd;
+  if (i !== source.length && source[i] !== '\n') return null;
+  return { label, url, title, used: source.slice(0, i).split('\n').length };
 }
 
 function htmlBlockStart(line, interrupt = false) {
