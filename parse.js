@@ -218,7 +218,7 @@ function htmlBlockStart(line) {
   return false;
 }
 
-function blocks(input, shared, tight = null) {
+function blocks(input, shared, tight = null, spacing) {
   // Expand tabs to 4-column stops in the leading whitespace prefix only, so
   // indentation decisions see 4-column tabs while code content keeps raw tabs.
   const detab = line => {
@@ -234,7 +234,7 @@ function blocks(input, shared, tight = null) {
   for (let n = 0; n < lines.length;) { const d = definition(lines, n); if (!d) { n++; continue; } refs[normalize(d.label)] = { url: d.url, title: d.title }; lines.splice(n, d.used, ...Array(d.used).fill('')); n += d.used; }
   const html = [], blank = n => /^\s*$/.test(lines[n] ?? ''); let i = 0;
   while (i < lines.length) {
-    if (blank(i)) { i++; continue; } let line = lines[i], m;
+    if (blank(i)) { if (spacing && html.length && lines.slice(i).some(s => /\S/.test(s))) spacing.separated = true; i++; continue; } let line = lines[i], m;
     const endHTML = htmlBlockStart(line);
     if (endHTML !== false) { const b = [line]; i++; while (i < lines.length && !endHTML.test(b.join('\n')) && !(endHTML.source === '^$' && blank(i))) b.push(lines[i++]); const boundary = endHTML.source === '^$' && blank(i); html.push(b.join('\n') + (!boundary || i === lines.length - 1 ? '\n' : '')); continue; }
     if (/^ {4}/.test(line)) { const b = []; while (i < lines.length && (/^ {4}/.test(lines[i]) || blank(i))) { b.push(/^ {4}/.test(lines[i]) ? lines[i].slice(4) : ''); i++; } while (b.at(-1) === '') b.pop(); html.push(`<pre><code>${esc(b.join('\n'))}\n</code></pre>\n`); continue; }
@@ -291,15 +291,16 @@ function blocks(input, shared, tight = null) {
           else break;
           i++;
         }
-        if (sawBlank) loose = true;
+        if (sawBlank && body.at(-1) === '' && /^( {0,3})([*+-]|\d{1,9}[.)])[ \t]+/.test(lines[i] ?? '')) loose = true;
         while (body.at(-1) === '') body.pop();
         let first = body[0] ?? '', check = '';
         const task = /^\[([ xX])\][ \t]+/.exec(first);
         if (task) { check = `<input${task[1].toLowerCase() === 'x' ? ' checked=""' : ''} disabled="" type="checkbox"> `; body[0] = first.slice(task[0].length); }
         items.push({ check, body });
       }
-      const rendered = items.map(({ check, body }) => {
-        const value = blocks(body.join('\n'), refs, !loose);
+      const contents = items.map(({ body }) => { const spacing = {}; const value = blocks(body.join('\n'), refs, false, spacing); if (spacing.separated) loose = true; return value; });
+      const rendered = items.map(({ check, body }, n) => {
+        const value = loose ? contents[n] : blocks(body.join('\n'), refs, true);
         return `<li>${check}${value}</li>`;
       });
       html.push(`<${tag}${ordered && start !== 1 ? ` start="${start}"` : ''}>\n${rendered.join('\n')}\n</${tag}>\n`); continue;
