@@ -255,7 +255,7 @@ function blocks(input, shared, tight = null, spacing) {
       while (i < lines.length) {
         if (/^ {0,3}>/.test(lines[i])) {
           const content = lines[i++].replace(/^ {0,3}> ?/, ''); b.push(content);
-          const inner = content.replace(/^(?: {0,3}> ?)+/, '');
+          const inner = content.replace(/^(?: {0,3}(?:> ?|(?:[*+-]|\d{1,9}[.)])[ \t]+))+/, '');
           if (fence) { if (new RegExp(`^ {0,3}${fence[0]}{${fence.length},}[ \\t]*$`).test(inner)) fence = undefined; paragraph = false; }
           else if ((m = /^ {0,3}(`{3,}|~{3,})/.exec(inner))) { fence = m[1]; paragraph = false; }
           else paragraph = !/^\s*$/.test(inner) && !startsBlock(inner) && !/^ {0,3}(?:=+|-+)[ \t]*$/.test(inner) && (paragraph || !/^ {4}/.test(inner));
