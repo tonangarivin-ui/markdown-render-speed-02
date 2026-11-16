@@ -84,7 +84,11 @@ function labelClose(s, start) {
   return -1;
 }
 
-function resolveEmphasis(s) {
+function resolveEmphasis(raw) {
+  // A rendered inline token (link, code span, <br>, entity, raw tag) is opaque to the
+  // flanking rules: it acts like punctuation and never like a letter.
+  const s = raw.replace(/\d+/g, '￼');
+  const punct = c => c === '￼' || (!!c && /[\p{P}\p{S}]/u.test(c));
   const ds = [], opens = new Map(), closes = new Map(), used = new Set();
   for (let i = 0; i < s.length;) {
     if (s[i] !== '*' && s[i] !== '_') { i++; continue; }
@@ -192,7 +196,7 @@ function inline(source, refs = Object.create(null), depth = 0, links = {}) {
     if ((m = /^(?:https?:\/\/|www\.)[^\s<>]+/.exec(rest))) { const raw = m[0]; let u = raw.replace(/[?!.,;:]+$/, ''); while (u.endsWith(')') && (u.match(/\)/g)?.length ?? 0) > (u.match(/\(/g)?.length ?? 0)) u = u.slice(0, -1); if (/&[A-Za-z0-9]+;$/.test(u)) u = u.replace(/&[A-Za-z0-9]+;$/, ''); const href = u.startsWith('www.') ? `http://${u}` : u; put(`<a href="${esc(uri(href))}">${esc(u)}</a>`); i += u.length; continue; }
     text += source[i++];
   }
-  return resolveEmphasis(text).replace(/(\d+)/g, (_, n) => slots[+n]);
+  return resolveEmphasis(text).replace(/￼/g, () => slots.shift());
 }
 
 function definition(lines, at) {
