@@ -181,7 +181,7 @@ function inline(source, refs = Object.create(null), depth = 0, links = {}, inLin
           const nested = {}, body = inline(label, refs, depth + 1, nested, true);
           if (!image && nested.found) { text += source[i++]; continue; }
           if (!image) links.found = true;
-          put(image ? `<img src="${esc(url)}" alt="${esc(alt(body.replace(/<[^>]*>/g, '')))}"${attr}>` : `<a href="${esc(url)}"${attr}>${body}</a>`);
+          put(image ? `<img src="${esc(url)}" alt="${esc(alt(body.replace(/<img src="[^"]*" alt="([^"]*)"[^>]*>/g, '$1').replace(/<\/?(?:a|code|em|strong|del|br)\b[^>]*>/g, '')))}"${attr}>` : `<a href="${esc(url)}"${attr}>${body}</a>`);
           i = end; continue;
         }
       }
