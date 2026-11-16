@@ -275,7 +275,9 @@ function htmlBlockStart(line, interrupt = false) {
   return false;
 }
 
+const inlineQueue = Symbol('inlineQueue');
 function blocks(input, shared, tight = null, spacing, quoted = false) {
+  const inline = (source, refs) => `${refs[inlineQueue].push(source) - 1}`;
   // Expand tabs to 4-column stops in the leading whitespace prefix only, so
   // indentation decisions see 4-column tabs while code content keeps raw tabs.
   const detab = line => {
@@ -291,29 +293,12 @@ function blocks(input, shared, tight = null, spacing, quoted = false) {
   };
   const rawLines = input.replace(/\r\n?/g, '\n').replace(/\0/g, '�').split('\n');
   const lines = rawLines.map(detab);
-  const refs = shared ?? Object.create(null), definitions = new Set();
-  let fenced;
-  for (let n = 0; n < lines.length;) {
-    const fence = /^ {0,3}(`{3,}|~{3,})/.exec(lines[n]);
-    if (fenced) {
-      if (new RegExp(`^ {0,3}${fenced[0]}{${fenced.length},}[ \\t]*$`).test(lines[n])) fenced = undefined;
-      n++; continue;
-    }
-    if (fence && (fence[1][0] !== '`' || !lines[n].slice(fence[0].length).includes('`'))) { fenced = fence[1]; n++; continue; }
-    if (n && !/^\s*$/.test(lines[n - 1]) && !definition(lines, n - 1) && !/^ {0,3}(?:#{1,6}(?:\s|$)|(?:=+|-+)[ \t]*$|>)/.test(lines[n - 1])) { n++; continue; }
-    let d = definition(lines, n), quoted = false;
-    if (!d && /^ {0,3}> ?\[/.test(lines[n])) {
-      const content = lines[n].replace(/^ {0,3}> ?/, '');
-      d = definition([content], 0); quoted = !!d;
-    }
-    if (!d) { n++; continue; }
-    definitions.add(n); refs[normalize(d.label)] ??= { url: d.url, title: d.title };
-    if (quoted) lines[n] = '>'; else lines.splice(n, d.used, ...Array(d.used).fill(''));
-    n += d.used;
-  }
+  const refs = shared ?? Object.create(null);
   const html = [], blank = n => /^\s*$/.test(lines[n] ?? ''); let i = 0;
   while (i < lines.length) {
-    if (blank(i)) { if (spacing && html.length && (definitions.has(i) || lines.slice(i).some(s => /\S/.test(s)))) spacing.separated = true; i++; continue; } let line = lines[i], m;
+    if (blank(i)) { if (spacing && html.length && lines.slice(i).some(s => /\S/.test(s))) spacing.separated = true; i++; continue; } let line = lines[i], m;
+    const d = definition(lines, i);
+    if (d) { refs[normalize(d.label)] ??= { url: d.url, title: d.title }; i += d.used; continue; }
     const endHTML = htmlBlockStart(line);
     if (endHTML !== false) { const b = [rawLines[i]]; i++; while (i < lines.length && !endHTML.test(b.join('\n')) && !(endHTML.source === '^$' && blank(i))) b.push(rawLines[i++]); html.push(b.join('\n') + (i < lines.length && (i === lines.length - 1 || (endHTML.source !== '^$' && lines[i] !== '')) ? '\n' : '')); continue; }
     if (/^ {4}/.test(line)) { const b = []; while (i < lines.length && (/^ {4}/.test(lines[i]) || blank(i))) { b.push(/^ {4}/.test(lines[i]) ? rawLines[i].replace(/^(?: {0,3}\t| {1,4})/, '') : ''); i++; } while (b.at(-1) === '') b.pop(); html.push(`<pre><code>${codeEsc(b.join('\n'))}\n</code></pre>\n`); continue; }
@@ -405,4 +390,11 @@ function blocks(input, shared, tight = null, spacing, quoted = false) {
 // Marked's lexer carries one inLink flag through the whole document: a raw "<a>"
 // left unclosed stops every later bare URL and e-mail from linking.
 let inLink = false;
-export function parse(markdown) { inLink = false; try { return blocks(String(markdown)); } finally { inLink = false; } }
+export function parse(markdown) {
+  inLink = false;
+  const refs = Object.create(null); refs[inlineQueue] = [];
+  try {
+    const html = blocks(String(markdown), refs);
+    return html.replace(/(\d+)/g, (_, n) => inline(refs[inlineQueue][n], refs));
+  } finally { inLink = false; }
+}
