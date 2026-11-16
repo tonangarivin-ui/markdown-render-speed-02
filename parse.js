@@ -91,12 +91,13 @@ function resolveEmphasis(raw) {
   const punct = c => c === '￼' || (!!c && /[\p{P}\p{S}]/u.test(c));
   const ds = [], opens = new Map(), closes = new Map(), used = new Set();
   for (let i = 0; i < s.length;) {
-    if (s[i] !== '*' && s[i] !== '_') { i++; continue; }
+    if (s[i] !== '*' && s[i] !== '_' && s[i] !== '~') { i++; continue; }
     const start = i, ch = s[i]; while (s[i] === ch) i++;
+    if (ch === '~' && i - start > 2) continue;
     const before = s[start - 1], after = s[i];
     const left = !space(after) && (!punct(after) || space(before) || punct(before));
     const right = !space(before) && (!punct(before) || space(after) || punct(after));
-    ds.push({ start, end: i, ch, n: i - start, left: i - start, right: 0, open: left && (ch === '*' || !right || punct(before)), close: right && (ch === '*' || !left || punct(after)) });
+    ds.push({ start, end: i, ch, n: i - start, left: i - start, right: 0, open: left && (ch !== '_' || !right || punct(before)), close: right && (ch !== '_' || !left || punct(after)) });
   }
   const add = (map, at, value) => map.set(at, [...(map.get(at) ?? []), value]);
   for (let c = 0; c < ds.length; c++) {
@@ -106,7 +107,8 @@ function resolveEmphasis(raw) {
       for (let o = c - 1; o >= 0; o--) {
         const candidate = ds[o];
         if (candidate.dead || !candidate.open || candidate.ch !== close.ch || !candidate.n) continue;
-        if ((candidate.close || close.open) && (candidate.n + close.n) % 3 === 0 && (candidate.n % 3 || close.n % 3)) continue;
+        if (candidate.ch === '~' && candidate.n !== close.n) continue;
+        if (candidate.ch !== '~' && (candidate.close || close.open) && (candidate.n + close.n) % 3 === 0 && (candidate.n % 3 || close.n % 3)) continue;
         open = candidate; break;
       }
       if (!open) break;
@@ -114,15 +116,16 @@ function resolveEmphasis(raw) {
       for (let x = ds.indexOf(open) + 1; ds[x] !== close; x++) ds[x].dead = true;
       const n = open.n >= 2 && close.n >= 2 ? 2 : 1;
       const a = open.start + open.n - n, b = close.start + close.right;
-      add(opens, a, n); add(closes, b + n, n);
+      const kind = open.ch === '~' ? 'del' : n === 2 ? 'strong' : 'em';
+      add(opens, a, kind); add(closes, b + n, kind);
       for (let x = 0; x < n; x++) { used.add(a + x); used.add(b + x); }
       open.n -= n; close.n -= n; close.right += n;
     }
   }
   let out = '';
   for (let i = 0; i <= s.length; i++) {
-    for (const n of closes.get(i) ?? []) out += n === 2 ? '</strong>' : '</em>';
-    for (const n of opens.get(i) ?? []) out += n === 2 ? '<strong>' : '<em>';
+    for (const n of closes.get(i) ?? []) out += `</${n}>`;
+    for (const n of opens.get(i) ?? []) out += `<${n}>`;
     if (i < s.length && !used.has(i)) out += esc(s[i]);
   }
   return out;
@@ -191,7 +194,6 @@ function inline(source, refs = Object.create(null), depth = 0, links = {}, inAnc
         }
       }
     }
-    if ((m = /^(~{1,2})(?!~)(?=\S)([\s\S]*?\S)(?<!~)\1(?!~)/.exec(rest))) { put(`<del>${inline(m[2], refs, depth + 1)}</del>`); i += m[0].length; continue; }
     if ((m = /^~+/.exec(rest))) { text += m[0]; i += m[0].length; continue; }
     if (!inAnchor && !/[A-Za-z0-9.+_-]/.test(source[i - 1] ?? '') && (m = /^(?:(mailto|xmpp):)?([A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.[A-Za-z]+)(?![A-Za-z0-9_-])/i.exec(rest))) {
       let label = m[0];
