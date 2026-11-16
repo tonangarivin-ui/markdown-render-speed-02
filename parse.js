@@ -359,14 +359,16 @@ function blocks(input, shared, tight = null, spacing, quoted = false) {
     }
     if (/^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/.test(line)) { html.push('<hr>\n'); i++; continue; }
     if (/^ {0,3}>/.test(line)) {
-      const b = []; let paragraph = false, fence;
+      const b = []; let paragraph = false, fence, fenceDepth;
       const startsBlock = s => /^ {0,3}(?:#{1,6}(?:[ \t]|$)|>|`{3,}(?!`)[^`]*$|~{3,}|[*+-][ \t]+\S|1[.)][ \t]+\S|(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$)/.test(s) || htmlBlockStart(s) !== false;
       while (i < lines.length) {
         if (/^ {0,3}>/.test(lines[i])) {
           const content = lines[i++].replace(/^ {0,3}> ?/, ''); b.push(content);
+          const quoteDepth = content.match(/^(?: {0,3}> ?)*/)[0].split('>').length - 1;
+          if (fence && quoteDepth < fenceDepth) fence = undefined;
           const inner = content.replace(/^(?: {0,3}(?:> ?|(?:[*+-]|\d{1,9}[.)])[ \t]+))+/, '');
           if (fence) { if (new RegExp(`^ {0,3}${fence[0]}{${fence.length},}[ \\t]*$`).test(inner)) fence = undefined; paragraph = false; }
-          else if ((m = /^ {0,3}(`{3,}(?!`)[^`]*$|~{3,})/.exec(inner))) { fence = /^(`+|~+)/.exec(m[1])[0]; paragraph = false; }
+          else if ((m = /^ {0,3}(`{3,}(?!`)[^`]*$|~{3,})/.exec(inner))) { fence = /^(`+|~+)/.exec(m[1])[0]; fenceDepth = quoteDepth; paragraph = false; }
           else paragraph = !/^\s*$/.test(inner) && !startsBlock(inner) && !/^ {0,3}(?:=+|-+)[ \t]*$/.test(inner) && (paragraph || !/^ {4}/.test(inner));
         } else if (paragraph && !blank(i) && (!startsBlock(lines[i]) || /^ {0,3}=+[ \t]*$/.test(lines[i]))) { const lazy = lines[i++]; b.push(/^ {4}/.test(lazy) ? lazy : /^(?:=+|-+)[ \t]*$/.test(lazy) ? `    ${lazy}` : lazy); }
         else break;
