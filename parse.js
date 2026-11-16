@@ -134,7 +134,9 @@ function resolveEmphasis(raw, boundaries = []) {
       // A match consumes every delimiter between the pair: they can never be used.
       for (let x = ds.indexOf(open) + 1; ds[x] !== close; x++) ds[x].dead = true;
       const n = open.n >= 2 && close.n >= 2 ? 2 : 1;
-      const a = open.start + open.n - n, b = close.start + close.right;
+      const inner = ds.filter(run => run.start > open.start && run.end <= close.start && run.ch === open.ch);
+      const swallowed = n === 2 && close.n === 3 && open.n === 2 && inner.length === 2 && inner.every(run => run.left === 1 && !run.n) && inner[1].open;
+      const a = open.start + open.n - n, b = close.start + close.right + (swallowed ? 1 : 0);
       const kind = open.ch === '~' ? 'del' : n === 2 ? 'strong' : 'em';
       add(opens, a, kind); add(closes, b + n, kind);
       for (let x = 0; x < n; x++) { used.add(a + x); used.add(b + x); }
