@@ -66,6 +66,17 @@ function labelClose(s, start) {
   let depth = 0;
   for (let i = start; i < s.length; i++) {
     if (s[i] === '\\') { i++; continue; }
+    if (s[i] === '<') { const token = rawHTML.exec(s.slice(i)) ?? /^<[A-Za-z][A-Za-z+.-]{1,31}:[^ <>]*>/.exec(s.slice(i)); if (token) { i += token[0].length - 1; continue; } }
+    if (s[i] === '`') {
+      let end = i; while (s[end] === '`') end++;
+      const width = end - i;
+      for (let j = end; j < s.length; j++) {
+        if (s[j] !== '`') continue;
+        let k = j; while (s[k] === '`') k++;
+        if (k - j === width) { i = k - 1; break; }
+        j = k - 1;
+      }
+    }
     if (s[i] === '[') depth++;
     else if (s[i] === ']') { if (!depth) return i; depth--; }
   }
@@ -138,7 +149,7 @@ function inline(source, refs = Object.create(null), depth = 0) {
       put(m[0]); i += m[0].length; continue;
     }
     if ((m = rawHTML.exec(rest))) { put(m[0]); i += m[0].length; continue; }
-    if ((m = /^<([A-Za-z][A-Za-z+.-]{1,31}:[^ <>]*)>/i.exec(rest))) { const href = m[1], label = href.replace(/^mailto:/i, ''); put(`<a href="${esc(href)}">${esc(label)}</a>`); i += m[0].length; continue; }
+    if ((m = /^<([A-Za-z][A-Za-z+.-]{1,31}:[^ <>]*)>/i.exec(rest))) { const href = uri(m[1]), label = m[1].replace(/^mailto:/i, ''); put(`<a href="${esc(href)}">${esc(label)}</a>`); i += m[0].length; continue; }
     if ((m = /^<([A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+)>/.exec(rest))) { put(`<a href="mailto:${esc(m[1])}">${esc(m[1])}</a>`); i += m[0].length; continue; }
     const image = source[i] === '!' && source[i + 1] === '[';
     if (source[i] === '[' || image) {
