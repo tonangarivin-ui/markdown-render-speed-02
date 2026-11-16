@@ -361,7 +361,8 @@ function blocks(input, shared, tight = null, spacing, quoted = false) {
           else break;
           i++;
         }
-        if (sawBlank && body.at(-1) === '' && listMarker.test(lines[i] ?? '')) loose = true;
+        const following = listMarker.exec(lines[i] ?? '');
+        if (sawBlank && body.at(-1) === '' && following && /^\d/.test(following[2]) === ordered && following[2].at(-1) === m[2].at(-1)) loose = true;
         while (body.at(-1) === '') body.pop();
         if (empty && body[0] === '') body.shift();
         let first = body[0] ?? '', check = '';
