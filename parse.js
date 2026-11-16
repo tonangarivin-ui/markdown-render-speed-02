@@ -108,6 +108,7 @@ function resolveEmphasis(raw) {
         const candidate = ds[o];
         if (candidate.dead || !candidate.open || candidate.ch !== close.ch || !candidate.n) continue;
         if (candidate.ch === '~' && candidate.n !== close.n) continue;
+        if (candidate.n >= 2 && close.n === 1 && ds.slice(o + 1, c).some(run => !run.n && run.ch === candidate.ch) && ds.slice(c + 1).some(run => run.ch === candidate.ch && run.close && run.n >= candidate.n)) continue;
         if (candidate.ch !== '~' && candidate.left === 1) {
           let balance = 1, deferred = false;
           for (let x = o + 1; x < c; x++) {
