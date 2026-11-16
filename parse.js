@@ -1,4 +1,5 @@
 const esc = s => s.replace(/&#\d{1,7};|&#[xX][\da-fA-F]{1,6};|&[A-Za-z0-9_]+;|[&<>"']/g, c => c === '&' ? '&amp;' : ({ '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] ?? c));
+const codeEsc = s => esc(s.replace(/&/g, '&amp;'));
 const punct = c => !!c && /[\p{P}\p{S}]/u.test(c);
 const space = c => !c || /\s/u.test(c);
 const normalize = s => s.replace(/[\t\n ]+/g, ' ').trim().toLowerCase().toUpperCase();
@@ -140,7 +141,7 @@ function inline(source, refs = Object.create(null), depth = 0) {
         if (k - j === n) { end = j; break; }
         j = k;
       }
-      if (end >= 0) { let code = source.slice(i + n, end).replace(/\n/g, ' '); if (/^ .* $/.test(code) && /[^ ]/.test(code)) code = code.slice(1, -1); put(`<code>${esc(code)}</code>`); i = end + n; continue; }
+      if (end >= 0) { let code = source.slice(i + n, end).replace(/\n/g, ' '); if (/^ .* $/.test(code) && /[^ ]/.test(code)) code = code.slice(1, -1); put(`<code>${codeEsc(code)}</code>`); i = end + n; continue; }
     }
     if ((m = /^&#(?:[xX][\da-fA-F]{1,6}|\d{1,7});/.exec(rest))) {
       text += entity(m[0]); i += m[0].length; continue;
@@ -257,8 +258,8 @@ function blocks(input, shared, tight = null, spacing) {
     if (blank(i)) { if (spacing && html.length && (definitions.has(i) || lines.slice(i).some(s => /\S/.test(s)))) spacing.separated = true; i++; continue; } let line = lines[i], m;
     const endHTML = htmlBlockStart(line);
     if (endHTML !== false) { const b = [line]; i++; while (i < lines.length && !endHTML.test(b.join('\n')) && !(endHTML.source === '^$' && blank(i))) b.push(lines[i++]); html.push(b.join('\n') + (i < lines.length && (!blank(i) || i === lines.length - 1) ? '\n' : '')); continue; }
-    if (/^ {4}/.test(line)) { const b = []; while (i < lines.length && (/^ {4}/.test(lines[i]) || blank(i))) { b.push(/^ {4}/.test(lines[i]) ? lines[i].slice(4) : ''); i++; } while (b.at(-1) === '') b.pop(); html.push(`<pre><code>${esc(b.join('\n'))}\n</code></pre>\n`); continue; }
-    if ((m = /^( {0,3})(`{3,}(?!`)([^`]*?)|~{3,}(.*))$/.exec(line))) { const fence = /^(`+|~+)/.exec(m[2])[0], info = (m[3] ?? m[4]).trim().split(/\s+/)[0], b = [], end = lines.length - (lines.at(-1) === '' ? 1 : 0), unindent = new RegExp(`^ {0,${m[1].length}}`); i++; const closer = new RegExp(`^ {0,3}${fence[0]}{${fence.length},}[ \\t]*$`); while (i < end && !closer.test(lines[i])) b.push(lines[i++].replace(unindent, '')); if (i < lines.length) i++; html.push(`<pre><code${info ? ` class="language-${esc(info)}"` : ''}>${esc(b.join('\n'))}${b.length ? '\n' : ''}</code></pre>\n`); continue; }
+    if (/^ {4}/.test(line)) { const b = []; while (i < lines.length && (/^ {4}/.test(lines[i]) || blank(i))) { b.push(/^ {4}/.test(lines[i]) ? lines[i].slice(4) : ''); i++; } while (b.at(-1) === '') b.pop(); html.push(`<pre><code>${codeEsc(b.join('\n'))}\n</code></pre>\n`); continue; }
+    if ((m = /^( {0,3})(`{3,}(?!`)([^`]*?)|~{3,}(.*))$/.exec(line))) { const fence = /^(`+|~+)/.exec(m[2])[0], info = (m[3] ?? m[4]).trim().split(/\s+/)[0], b = [], end = lines.length - (lines.at(-1) === '' ? 1 : 0), unindent = new RegExp(`^ {0,${m[1].length}}`); i++; const closer = new RegExp(`^ {0,3}${fence[0]}{${fence.length},}[ \\t]*$`); while (i < end && !closer.test(lines[i])) b.push(lines[i++].replace(unindent, '')); if (i < lines.length) i++; html.push(`<pre><code${info ? ` class="language-${esc(info)}"` : ''}>${codeEsc(b.join('\n'))}${b.length ? '\n' : ''}</code></pre>\n`); continue; }
     if ((m = /^ {0,3}(#{1,6})(?:[ \t]+(.*?)[ \t]*|[ \t]*)$/.exec(line))) {
       const body = (m[2] ?? '').replace(/[ \t]+#+[ \t]*$/, '').replace(/^#+[ \t]*$/, '');
       html.push(`<h${m[1].length}>${inline(body, refs)}</h${m[1].length}>\n`); i++; continue;
