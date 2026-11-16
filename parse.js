@@ -174,7 +174,7 @@ function inline(source, refs = Object.create(null), depth = 0, links = {}, inAnc
       put(m[0]); i += m[0].length; continue;
     }
     if ((m = rawHTML.exec(rest))) {
-      if (/^<a(?:\s|\/?>)/i.test(m[0])) inLink = true; else if (/^<\/a\s*>/i.test(m[0])) inLink = false;
+      if (/^<a /i.test(m[0])) inLink = true; else if (/^<\/a>/i.test(m[0])) inLink = false;
       put(m[0]); i += m[0].length; continue;
     }
     if ((m = /^<([A-Za-z][A-Za-z+.-]{1,31}:[^ <>]*)>/i.exec(rest))) { const href = uri(m[1]); put(`<a href="${esc(href)}">${esc(m[1])}</a>`); i += m[0].length; continue; }
@@ -209,7 +209,7 @@ function inline(source, refs = Object.create(null), depth = 0, links = {}, inAnc
       }
     }
     if ((m = /^~+/.exec(rest))) { text += m[0]; i += m[0].length; continue; }
-    if (!inAnchor && !/[A-Za-z0-9.+_-]/.test(source[i - 1] ?? '') && (m = /^(?:(mailto|xmpp):)?([A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.[A-Za-z]+)(?![A-Za-z0-9-])/i.exec(rest)) && (source[i + m[0].length] !== '_' || /(?:^|[\s\p{P}])_+(?=\S)/u.test(text))) {
+    if (!inLink && !inAnchor && !/[A-Za-z0-9.+_-]/.test(source[i - 1] ?? '') && (m = /^(?:(mailto|xmpp):)?([A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.[A-Za-z]+)(?![A-Za-z0-9-])/i.exec(rest)) && (source[i + m[0].length] !== '_' || /(?:^|[\s\p{P}])_+(?=\S)/u.test(text))) {
       let label = m[0];
       if (m[1]?.toLowerCase() === 'xmpp') label += (/^\/[A-Za-z0-9@._+-]+/.exec(rest.slice(label.length))?.[0] ?? '').replace(/[._]+$/, '');
       put(`<a href="${esc(m[1] ? label : `mailto:${label}`)}">${esc(label)}</a>`); i += label.length; continue;
