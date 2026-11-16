@@ -193,7 +193,7 @@ function inline(source, refs = Object.create(null), depth = 0, links = {}) {
       if (m[1]?.toLowerCase() === 'xmpp') label += (/^\/[A-Za-z0-9@._+-]+/.exec(rest.slice(label.length))?.[0] ?? '').replace(/[._]+$/, '');
       put(`<a href="${esc(m[1] ? label : `mailto:${label}`)}">${esc(label)}</a>`); i += label.length; continue;
     }
-    if ((m = /^(?:https?:\/\/|www\.)[^\s<>]+/.exec(rest))) { const raw = m[0]; let u = raw.replace(/[?!.,;:]+$/, ''); while (u.endsWith(')') && (u.match(/\)/g)?.length ?? 0) > (u.match(/\(/g)?.length ?? 0)) u = u.slice(0, -1); if (/&[A-Za-z0-9]+;$/.test(u)) u = u.replace(/&[A-Za-z0-9]+;$/, ''); const href = u.startsWith('www.') ? `http://${u}` : u; put(`<a href="${esc(uri(href))}">${esc(u)}</a>`); i += u.length; continue; }
+    if ((m = /^(?:[Hh][Tt][Tt][Pp][Ss]?:\/\/|www\.)[^\s<>]+/.exec(rest))) { let u = m[0].replace(/&[A-Za-z0-9]+;$/, '').replace(/[?!.,;:*_~"']+$/, ''); while (u.endsWith(')') && (u.match(/\)/g)?.length ?? 0) > (u.match(/\(/g)?.length ?? 0)) u = u.slice(0, -1);  const href = u.startsWith('www.') ? `http://${u}` : u; put(`<a href="${esc(uri(href))}">${esc(u)}</a>`); i += u.length; continue; }
     text += source[i++];
   }
   return resolveEmphasis(text).replace(/￼/g, () => slots.shift());
@@ -367,7 +367,7 @@ function blocks(input, shared, tight = null, spacing) {
       html.push(`<${tag}${ordered && start !== 1 ? ` start="${start}"` : ''}>\n${rendered.join('\n')}\n</${tag}>\n`); continue;
     }
     const para = [line]; i++;
-    while (i < lines.length && !blank(i) && htmlBlockStart(lines[i], true) === false && !/^( {0,3}(?:#{1,6})(?:[ \t]|$)| {0,3}>| {0,3}(?:[*+-]|1[.)])[ \t]+\S| {0,3}(?:`{3,}|~{3,}))/.test(lines[i])) {
+    while (i < lines.length && !blank(i) && htmlBlockStart(lines[i], true) === false && !new RegExp(`^( {0,3}(?:#{1,6})(?:[ \\t]|$)| {0,3}>| {0,3}(?:[*+-]|${tight !== null ? '\\d{1,9}' : '1'}[.)])[ \\t]+\\S| {0,3}(?:\`{3,}|~{3,}))`).test(lines[i])) {
       if (/^ {0,3}(?:=+|-+)[ \t]*$/.test(lines[i])) { const level = lines[i].trim()[0] === '=' ? 1 : 2; html.push(`<h${level}>${inline(para.join('\n').trim(), refs)}</h${level}>\n`); i++; para.length = 0; break; }
       if (/^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/.test(lines[i])) { html.push(`<p>${inline(para.join('\n'), refs)}</p>\n<hr>\n`); i++; para.length = 0; break; }
       para.push(tight === null ? lines[i++] : lines[i++].replace(/^ +/, ''));
