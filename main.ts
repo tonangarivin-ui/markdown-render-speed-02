@@ -14,5 +14,8 @@ try {
 } catch (error) {
   throw new Error(`Cannot read input cases at ${inputPath}`, { cause: error });
 }
+if (!Array.isArray(cases) || cases.some(item => !item || typeof item.id !== 'string' || typeof item.markdown !== 'string')) {
+  throw new Error(`Invalid input cases at ${inputPath}: expected an array of { id, markdown } strings`);
+}
 const html = cases.map(item => parse(item.markdown));
 writeFileSync(outputPath, JSON.stringify(html));
