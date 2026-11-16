@@ -323,7 +323,7 @@ function blocks(input, shared, tight = null, spacing) {
       if (head.length === defs.length) {
         const align = defs.map(x => /^:.*:$/.test(x) ? 'center' : /^:/.test(x) ? 'left' : /:$/.test(x) ? 'right' : '');
         const row = (xs, tag) => `<tr>\n${head.map((_, n) => `<${tag}${align[n] ? ` align="${align[n]}"` : ''}>${inline(xs[n] ?? '', refs)}</${tag}>`).join('\n')}\n</tr>`;
-        const rows = []; i += 2; while (i < lines.length && !blank(i) && !/^ {0,3}(?:>|#{1,6}(?:\s|$)|`{3,}|~{3,})/.test(lines[i]) && !listMarker.test(lines[i]) && htmlBlockStart(lines[i], true) === false) rows.push(row(cells(lines[i++]), 'td'));
+        const rows = []; i += 2; while (i < lines.length && !/^ *$/.test(rawLines[i] ?? '') && !/^ {0,3}(?:>|#{1,6}(?:\s|$)|`{3,}|~{3,})/.test(lines[i]) && !listMarker.test(lines[i]) && htmlBlockStart(lines[i], true) === false) rows.push(row(cells(lines[i++]), 'td'));
         html.push(`<table>\n<thead>\n${row(head, 'th')}\n</thead>\n${rows.length ? `<tbody>${rows.join('\n')}\n</tbody>` : ''}</table>\n`); continue;
       }
     }
