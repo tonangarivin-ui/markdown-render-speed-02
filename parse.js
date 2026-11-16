@@ -259,7 +259,7 @@ function htmlBlockStart(line, interrupt = false) {
   return false;
 }
 
-function blocks(input, shared, tight = null, spacing) {
+function blocks(input, shared, tight = null, spacing, quoted = false) {
   // Expand tabs to 4-column stops in the leading whitespace prefix only, so
   // indentation decisions see 4-column tabs while code content keeps raw tabs.
   const detab = line => {
@@ -309,18 +309,18 @@ function blocks(input, shared, tight = null, spacing) {
     if (/^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/.test(line)) { html.push('<hr>\n'); i++; continue; }
     if (/^ {0,3}>/.test(line)) {
       const b = []; let paragraph = false, fence;
-      const startsBlock = s => /^ {0,3}(?:#{1,6}(?:[ \t]|$)|>|`{3,}|~{3,}|[*+-][ \t]+\S|1[.)][ \t]+\S|(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$)/.test(s) || htmlBlockStart(s) !== false;
+      const startsBlock = s => /^ {0,3}(?:#{1,6}(?:[ \t]|$)|>|`{3,}(?!`)[^`]*$|~{3,}|[*+-][ \t]+\S|1[.)][ \t]+\S|(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$)/.test(s) || htmlBlockStart(s) !== false;
       while (i < lines.length) {
         if (/^ {0,3}>/.test(lines[i])) {
           const content = lines[i++].replace(/^ {0,3}> ?/, ''); b.push(content);
           const inner = content.replace(/^(?: {0,3}(?:> ?|(?:[*+-]|\d{1,9}[.)])[ \t]+))+/, '');
           if (fence) { if (new RegExp(`^ {0,3}${fence[0]}{${fence.length},}[ \\t]*$`).test(inner)) fence = undefined; paragraph = false; }
-          else if ((m = /^ {0,3}(`{3,}|~{3,})/.exec(inner))) { fence = m[1]; paragraph = false; }
+          else if ((m = /^ {0,3}(`{3,}(?!`)[^`]*$|~{3,})/.exec(inner))) { fence = /^(`+|~+)/.exec(m[1])[0]; paragraph = false; }
           else paragraph = !/^\s*$/.test(inner) && !startsBlock(inner) && !/^ {0,3}(?:=+|-+)[ \t]*$/.test(inner) && (paragraph || !/^ {4}/.test(inner));
-        } else if (paragraph && !blank(i) && (!startsBlock(lines[i]) || /^ {0,3}=+[ \t]*$/.test(lines[i]))) { const lazy = lines[i++].replace(/^ +/, ''); b.push(/^(?:=+|-+)[ \t]*$/.test(lazy) ? `    ${lazy}` : lazy); }
+        } else if (paragraph && !blank(i) && (!startsBlock(lines[i]) || /^ {0,3}=+[ \t]*$/.test(lines[i]))) { const lazy = lines[i++]; b.push(/^ {4}/.test(lazy) ? lazy : /^(?:=+|-+)[ \t]*$/.test(lazy) ? `    ${lazy}` : lazy); }
         else break;
       }
-      html.push(`<blockquote>\n${blocks(b.join('\n'), refs)}</blockquote>\n`); continue;
+      html.push(`<blockquote>\n${blocks(b.join('\n'), refs, null, undefined, true)}</blockquote>\n`); continue;
     }
     const cells = s => s.trim().replace(/^\||\|$/g, '').split(/(?<!\\)\|/).map(x => x.trim().replace(/\\\|/g, '|'));
     if (i + 1 < lines.length && line.includes('|') && /^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$/.test(lines[i + 1])) {
@@ -375,10 +375,10 @@ function blocks(input, shared, tight = null, spacing) {
       html.push(`<${tag}${ordered && start !== 1 ? ` start="${start}"` : ''}>\n${rendered.join('\n')}\n</${tag}>\n`); continue;
     }
     const para = [line]; i++;
-    while (i < lines.length && !blank(i) && htmlBlockStart(lines[i], true) === false && !new RegExp(`^( {0,3}(?:#{1,6})(?:[ \\t]|$)| {0,3}>| {0,3}(?:[*+-]|${tight !== null ? '\\d{1,9}' : '1'}[.)])[ \\t]+\\S| {0,3}(?:\`{3,}|~{3,}))`).test(lines[i])) {
+    while (i < lines.length && (!blank(i) || (quoted && i === lines.length - 1 && lines[i] !== '')) && htmlBlockStart(lines[i], true) === false && !new RegExp(`^( {0,3}(?:#{1,6})(?:[ \\t]|$)| {0,3}>| {0,3}(?:[*+-]|${tight !== null ? '\\d{1,9}' : '1'}[.)])[ \\t]+\\S| {0,3}(?:\`{3,}(?!\`)[^\`]*$|~{3,}))`).test(lines[i])) {
       if (/^ {0,3}(?:=+|-+)[ \t]*$/.test(lines[i])) { const level = lines[i].trim()[0] === '=' ? 1 : 2; html.push(`<h${level}>${inline(para.join('\n').trim(), refs)}</h${level}>\n`); i++; para.length = 0; break; }
       if (/^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/.test(lines[i])) { html.push(`<p>${inline(para.join('\n'), refs)}</p>\n<hr>\n`); i++; para.length = 0; break; }
-      para.push(tight === null ? lines[i++] : lines[i++].replace(/^ +/, ''));
+      para.push((tight !== null || quoted) && /^ {4}(?! *(?:=+|-+)[ \t]*$)/.test(lines[i]) ? lines[i++].replace(/^ +/, '') : lines[i++]);
     }
     if (para.length) html.push(tight ? inline(para.join('\n'), refs) : `<p>${inline(para.join('\n'), refs)}</p>\n`);
   }
