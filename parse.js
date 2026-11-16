@@ -301,7 +301,7 @@ function blocks(input, shared, tight = null, spacing) {
     const endHTML = htmlBlockStart(line);
     if (endHTML !== false) { const b = [line]; i++; while (i < lines.length && !endHTML.test(b.join('\n')) && !(endHTML.source === '^$' && blank(i))) b.push(lines[i++]); html.push(b.join('\n') + (i < lines.length && (i === lines.length - 1 || lines[i] !== '') ? '\n' : '')); continue; }
     if (/^ {4}/.test(line)) { const b = []; while (i < lines.length && (/^ {4}/.test(lines[i]) || blank(i))) { b.push(/^ {4}/.test(lines[i]) ? rawLines[i].replace(/^(?: {0,3}\t| {1,4})/, '') : ''); i++; } while (b.at(-1) === '') b.pop(); html.push(`<pre><code>${codeEsc(b.join('\n'))}\n</code></pre>\n`); continue; }
-    if ((m = /^( {0,3})(`{3,}(?!`)([^`]*?)|~{3,}(.*))$/.exec(line))) { const fence = /^(`+|~+)/.exec(m[2])[0], info = (m[3] ?? m[4]).trim().split(/\s+/)[0].replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/g, '$1'), b = [], end = lines.length - (lines.at(-1) === '' ? 1 : 0), unindent = new RegExp(`^ {0,${m[1].length}}`); i++; const closer = new RegExp(`^ {0,3}${fence[0]}{${fence.length},}[ \\t]*$`); while (i < end && !closer.test(lines[i])) { b.push(rawLines[i].replace(unindent, '')); i++; } if (i < lines.length) i++; html.push(`<pre><code${info ? ` class="language-${esc(info)}"` : ''}>${codeEsc(b.join('\n'))}${b.length ? '\n' : ''}</code></pre>\n`); continue; }
+    if ((m = /^( {0,3})(`{3,}(?!`)([^`]*?)|~{3,}(.*))$/.exec(line))) { const fence = /^(`+|~+)/.exec(m[2])[0], info = (m[3] ?? m[4]).trim().split(/\s+/)[0].replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/g, '$1'), b = [], end = lines.length - (lines.at(-1) === '' ? 1 : 0), unindent = new RegExp(`^ {0,${m[1].length}}`); i++; const closer = new RegExp(`^ {0,3}${fence[0]}{${fence.length},}[ \\t]*$`); while (i < end && !closer.test(lines[i])) { b.push(rawLines[i].replace(unindent, '')); i++; } if (i < lines.length) i++; if (b.at(-1) === '') b.pop(); html.push(`<pre><code${info ? ` class="language-${esc(info)}"` : ''}>${codeEsc(b.join('\n'))}${b.length ? '\n' : ''}</code></pre>\n`); continue; }
     if ((m = /^ {0,3}(#{1,6})(?:[ \t]+(.*?)[ \t]*|[ \t]*)$/.exec(line))) {
       const body = (m[2] ?? '').replace(/[ \t]+#+[ \t]*$/, '').replace(/^#+[ \t]*$/, '');
       html.push(`<h${m[1].length}>${inline(body, refs)}</h${m[1].length}>\n`); i++; continue;
@@ -340,14 +340,17 @@ function blocks(input, shared, tight = null, spacing) {
         if (!item || /^\d/.test(item[2]) !== ordered || item[2].at(-1) !== m[2].at(-1) || /^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/.test(lines[i])) break;
         const marker = item[1].length + item[2].length, pad = (item[3] ?? ' ').replace(/\t/g, '    ').length;
         const empty = !(item[4] ?? '').trim();
-        const indent = empty || pad > 4 ? marker + 1 : marker + pad, body = [empty ? '' : `${pad > 4 ? ' '.repeat(pad - 1) : ''}${item[4]}`]; let sawBlank = false; i++;
+        const indent = empty || pad > 4 ? marker + 1 : marker + pad, body = [empty ? '' : `${pad > 4 ? ' '.repeat(pad - 1) : ''}${item[4]}`]; let sawBlank = false, itemFence; i++;
         while (i < lines.length) {
+          const previous = body.at(-1) ?? '';
+          if (itemFence) { if (new RegExp(`^ {0,3}${itemFence[0]}{${itemFence.length},}[ \\t]*$`).test(previous)) itemFence = undefined; }
+          else { const opening = /^ {0,3}(`{3,}(?!`)[^`]*|~{3,}.*)$/.exec(previous); if (opening) itemFence = /^(`+|~+)/.exec(opening[1])[0]; }
           if (blank(i)) {
             if (empty && body.length === 1) { if (listMarker.test(lines[i + 1] ?? '')) { loose = true; i++; } break; }
             const next = lines[i + 1] ?? '', nextIndent = (next.match(/^ */) ?? [''])[0].length;
             if (!/^\s*$/.test(next) && !listMarker.test(next) && nextIndent < indent) break;
             if (listMarker.test(next) || nextIndent >= indent) sawBlank = true;
-            if (body.at(-1) !== '' || /^ {4}/.test(body.findLast(s => /\S/.test(s)) ?? '')) body.push(''); i++; continue;
+            if (itemFence || body.at(-1) !== '' || /^ {4}/.test(body.findLast(s => /\S/.test(s)) ?? '')) body.push(''); i++; continue;
           }
           const lead = (lines[i].match(/^ */) ?? [''])[0].length;
           if (lead >= indent) body.push(lines[i].slice(indent));
