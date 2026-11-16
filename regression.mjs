@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { parse } from './parse.js';
 
@@ -29,6 +29,13 @@ try {
     assert.match(result.stderr, /Invalid input cases/);
     assert.equal(readFileSync(`${dir}/html.json`, 'utf8'), saved);
   }
+  writeFileSync(`${dir}/cases.json`, JSON.stringify([{ id: 'valid', markdown: 'Valid' }]));
+  rmSync(`${dir}/html.json`);
+  mkdirSync(`${dir}/html.json`);
+  writeFileSync(`${dir}/html.json/keep`, saved);
+  assert.notEqual(run().status, 0);
+  assert.equal(readFileSync(`${dir}/html.json/keep`, 'utf8'), saved);
+  assert.deepEqual(readdirSync(dir).sort(), ['cases.json', 'html.json']);
 } finally {
   rmSync(dir, { recursive: true, force: true });
 }

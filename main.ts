@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from './parse.js';
 
@@ -18,4 +18,12 @@ if (!Array.isArray(cases) || cases.some(item => !item || typeof item.id !== 'str
   throw new Error(`Invalid input cases at ${inputPath}: expected an array of { id, markdown } strings`);
 }
 const html = cases.map(item => parse(item.markdown));
-writeFileSync(outputPath, JSON.stringify(html));
+// Stage on the same filesystem so publication cannot leave a partial JSON file.
+const stagingDir = mkdtempSync(join(outputDir, '.html-'));
+try {
+  const stagedPath = join(stagingDir, 'html.json');
+  writeFileSync(stagedPath, JSON.stringify(html));
+  renameSync(stagedPath, outputPath);
+} finally {
+  rmSync(stagingDir, { recursive: true, force: true });
+}
