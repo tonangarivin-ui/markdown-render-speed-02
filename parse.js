@@ -156,6 +156,11 @@ function inline(source, refs = Object.create(null), depth = 0) {
       }
     }
     if ((m = /^~~(?=\S)([\s\S]*?\S)~~/.exec(rest))) { put(`<del>${inline(m[1], refs, depth + 1)}</del>`); i += m[0].length; continue; }
+    if (!/[A-Za-z0-9.+_-]/.test(source[i - 1] ?? '') && (m = /^(?:(mailto|xmpp):)?([A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.[A-Za-z]+)(?![A-Za-z0-9_-])/i.exec(rest))) {
+      let label = m[0];
+      if (m[1]?.toLowerCase() === 'xmpp') label += (/^\/[A-Za-z0-9@._+-]+/.exec(rest.slice(label.length))?.[0] ?? '').replace(/[._]+$/, '');
+      put(`<a href="${esc(m[1] ? label : `mailto:${label}`)}">${esc(label)}</a>`); i += label.length; continue;
+    }
     if ((m = /^(?:https?:\/\/|www\.)[^\s<>]+/i.exec(rest))) { const raw = m[0]; let u = raw.replace(/[?!.,:*_~]+$/, ''); while (u.endsWith(')') && (u.match(/\)/g)?.length ?? 0) > (u.match(/\(/g)?.length ?? 0)) u = u.slice(0, -1); if (/&[A-Za-z0-9]+;$/.test(u)) u = u.replace(/&[A-Za-z0-9]+;$/, ''); const href = /^www\./i.test(u) ? `http://${u}` : u; put(`<a href="${esc(href)}">${esc(u)}</a>`); i += u.length; continue; }
     text += source[i++];
   }
