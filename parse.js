@@ -6,6 +6,11 @@ const normalize = s => s.replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/g, '
 // percent signs (which encodeURI turned into %25) back to '%'.
 const uri = s => encodeURI(s).replace(/%25/g, '%');
 const alt = s => s.replace(/`+([^`]*?)`+/g, '$1').replace(/[*!_~]/g, '').replace(/\n/g, ' ');
+const tagName = '[A-Za-z][A-Za-z0-9-]*';
+const attribute = "[A-Za-z_:][A-Za-z0-9:._-]*(?:[ \\t\\n\\r\\f]*=[ \\t\\n\\r\\f]*(?:\"[^\"]*\"|'[^']*'|[^ \\t\\n\\r\\f\"'=<>`]+))?";
+const tag = `(?:<${tagName}(?:[ \\t\\n\\r\\f]+${attribute})*[ \\t\\n\\r\\f]*/?>|</${tagName}[ \\t\\n\\r\\f]*>)`;
+const rawHTML = new RegExp(`^(?:<!--(?:-?>|[\\s\\S]*?-->)|<\\?[\\s\\S]*?\\?>|<![A-Za-z][^>]*>|<!\\[CDATA\\[[\\s\\S]*?\\]\\]>|${tag})`);
+const completeTag = new RegExp(`^ {0,3}${tag}[ \\t]*$`);
 
 // Numeric references are regular Unicode scalar values; named references are decoded by the browser
 // only when they remain in text, so retain unknown names literally.
@@ -131,7 +136,7 @@ function inline(source, refs = Object.create(null), depth = 0) {
     if ((m = /^&[A-Za-z0-9_]+;/.exec(rest))) {
       put(m[0]); i += m[0].length; continue;
     }
-    if ((m = /^<!--(?:[\s\S]*?)-->|^<\?[^]*?\?>|^<![A-Z]+(?:\s[^<>]*)?>|^<!\[CDATA\[[\s\S]*?\]\]>/.exec(rest)) || (m = /^<\/?[A-Za-z][A-Za-z0-9-]*(?:\s+[^<>]*?)?\s*\/?\s*>/.exec(rest))) { put(m[0]); i += m[0].length; continue; }
+    if ((m = rawHTML.exec(rest))) { put(m[0]); i += m[0].length; continue; }
     if ((m = /^<([A-Za-z][A-Za-z+.-]{1,31}:[^ <>]*)>/i.exec(rest))) { const href = m[1], label = href.replace(/^mailto:/i, ''); put(`<a href="${esc(href)}">${esc(label)}</a>`); i += m[0].length; continue; }
     if ((m = /^<([A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+)>/.exec(rest))) { put(`<a href="mailto:${esc(m[1])}">${esc(m[1])}</a>`); i += m[0].length; continue; }
     const image = source[i] === '!' && source[i + 1] === '[';
@@ -204,7 +209,7 @@ function htmlBlockStart(line) {
   if (/^ {0,3}<!\[CDATA\[/.test(line)) return /\]\]>/;
   if (/^ {0,3}<![A-Z]/.test(line)) return />/;
   if (/^ {0,3}<\/?(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|ol|p|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)(?:\s|\/?>|$)/i.test(line)) return /^$/;
-  if (/^ {0,3}<\/?[A-Za-z][A-Za-z0-9-]*(?:\s+[^<>]*)?\/?>\s*$/.test(line)) return /^$/;
+  if (completeTag.test(line)) return /^$/;
   return false;
 }
 
