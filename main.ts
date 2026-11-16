@@ -4,7 +4,15 @@ import { parse } from './parse.js';
 
 const inputDir = process.env.MAKEFUN_INPUT_DIR ?? '/input';
 const outputDir = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
-const cases: { id: string; markdown: string }[] = JSON.parse(readFileSync(join(inputDir, 'cases.json'), 'utf8'));
-const html: string[] = [];
-for (const item of cases) html.push(parse(item.markdown));
-writeFileSync(join(outputDir, 'html.json'), JSON.stringify(html));
+const inputPath = join(inputDir, 'cases.json');
+const outputPath = join(outputDir, 'html.json');
+
+// The harness requires one rendered HTML string for every input case, in order.
+let cases: { id: string; markdown: string }[];
+try {
+  cases = JSON.parse(readFileSync(inputPath, 'utf8'));
+} catch (error) {
+  throw new Error(`Cannot read input cases at ${inputPath}`, { cause: error });
+}
+const html = cases.map(item => parse(item.markdown));
+writeFileSync(outputPath, JSON.stringify(html));
