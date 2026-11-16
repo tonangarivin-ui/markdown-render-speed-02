@@ -84,17 +84,22 @@ function labelClose(s, start) {
   return -1;
 }
 
-function resolveEmphasis(raw) {
+function resolveEmphasis(raw, boundaries = []) {
   // A rendered inline token (link, code span, <br>, entity, raw tag) is opaque to the
   // flanking rules: it acts like punctuation and never like a letter.
-  const s = raw.replace(/\d+/g, '￼');
+  const edges = new Map(); let removed = 0;
+  const s = raw.replace(/(\d+)/g, (token, n, at) => {
+    if (boundaries[n]) edges.set(at - removed, boundaries[n]);
+    removed += token.length - 1;
+    return '￼';
+  });
   const punct = c => c === '￼' || (!!c && /[\p{P}\p{S}]/u.test(c));
   const ds = [], opens = new Map(), closes = new Map(), used = new Set();
   for (let i = 0; i < s.length;) {
     if (s[i] !== '*' && s[i] !== '_' && s[i] !== '~') { i++; continue; }
     const start = i, ch = s[i]; while (s[i] === ch) i++;
     if (ch === '~' && i - start > 2) continue;
-    const before = s[start - 1], after = s[i];
+    const before = edges.get(start - 1)?.at(-1) ?? s[start - 1], after = edges.get(i)?.[0] ?? s[i];
     const left = !space(after) && (!punct(after) || space(before) || punct(before));
     const right = !space(before) && (!punct(before) || space(after) || punct(after));
     ds.push({ start, end: i, ch, n: i - start, left: i - start, right: 0, open: left && (ch !== '_' || !right || punct(before)), close: right && (ch !== '_' || !left || punct(after)) });
@@ -147,9 +152,9 @@ function resolveEmphasis(raw) {
 
 function inline(source, refs = Object.create(null), depth = 0, links = {}, inAnchor = false) {
   if (depth > 32) return esc(source);
-  const slots = [], slot = value => `${slots.push(value) - 1}`;
+  const slots = [], boundaries = [], slot = (value, boundary) => { boundaries.push(boundary); return `${slots.push(value) - 1}`; };
   let text = '', i = 0;
-  const put = value => { text += slot(value); };
+  const put = (value, boundary) => { text += slot(value, boundary); };
   while (i < source.length) {
     const rest = source.slice(i); let m;
     if ((m = /^\\\n[ \t]*/.exec(rest))) { put('<br>'); i += m[0].length; continue; }
@@ -214,10 +219,10 @@ function inline(source, refs = Object.create(null), depth = 0, links = {}, inAnc
       if (m[1]?.toLowerCase() === 'xmpp') label += (/^\/[A-Za-z0-9@._+-]+/.exec(rest.slice(label.length))?.[0] ?? '').replace(/[._]+$/, '');
       put(`<a href="${esc(m[1] ? label : `mailto:${label}`)}">${esc(label)}</a>`); i += label.length; continue;
     }
-    if (!inLink && !inAnchor && (m = /^(?:[Hh][Tt][Tt][Pp][Ss]?:\/\/|www\.)[^\s<>]+/.exec(rest))) { let u = m[0]; const parentheses = []; for (let p = 0; p < u.length; p++) { if (u[p] === '(') parentheses.push(p); else if (u[p] === ')') parentheses.pop(); } if (parentheses.length) u = u.slice(0, parentheses[0]); for (;;) { const was = u; u = u.replace(/&[A-Za-z0-9]+;$/, ''); while (u.endsWith(')') && (u.lastIndexOf('(') < 0 || u.slice(u.lastIndexOf('(') + 1, -1).includes(')'))) u = u.slice(0, -1); u = u.replace(/[?!.,;:*_~"']+$/, ''); if (u === was) break; }  const href = u.startsWith('www.') ? `http://${u}` : u; put(`<a href="${esc(uri(href))}">${esc(u)}</a>`); i += u.length; continue; }
+    if (!inLink && !inAnchor && (m = /^(?:[Hh][Tt][Tt][Pp][Ss]?:\/\/|www\.)[^\s<>]+/.exec(rest))) { let u = m[0]; const parentheses = []; for (let p = 0; p < u.length; p++) { if (u[p] === '(') parentheses.push(p); else if (u[p] === ')') parentheses.pop(); } if (parentheses.length) u = u.slice(0, parentheses[0]); for (;;) { const was = u; u = u.replace(/&[A-Za-z0-9]+;$/, ''); while (u.endsWith(')') && (u.lastIndexOf('(') < 0 || u.slice(u.lastIndexOf('(') + 1, -1).includes(')'))) u = u.slice(0, -1); u = u.replace(/[?!.,;:*_~"']+$/, ''); if (u === was) break; }  const href = u.startsWith('www.') ? `http://${u}` : u; put(`<a href="${esc(uri(href))}">${esc(u)}</a>`, u); i += u.length; continue; }
     text += source[i++];
   }
-  return resolveEmphasis(text).replace(/￼/g, () => slots.shift());
+  return resolveEmphasis(text, boundaries).replace(/￼/g, () => slots.shift());
 }
 
 function definition(lines, at) {
