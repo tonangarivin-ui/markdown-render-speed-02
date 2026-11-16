@@ -128,7 +128,7 @@ function resolveEmphasis(raw) {
   return out;
 }
 
-function inline(source, refs = Object.create(null), depth = 0, links = {}, inLink = false) {
+function inline(source, refs = Object.create(null), depth = 0, links = {}, inAnchor = false) {
   if (depth > 32) return esc(source);
   const slots = [], slot = value => `${slots.push(value) - 1}`;
   let text = '', i = 0;
@@ -156,7 +156,10 @@ function inline(source, refs = Object.create(null), depth = 0, links = {}, inLin
     if ((m = /^&[A-Za-z0-9_]+;/.exec(rest))) {
       put(m[0]); i += m[0].length; continue;
     }
-    if ((m = rawHTML.exec(rest))) { put(m[0]); i += m[0].length; continue; }
+    if ((m = rawHTML.exec(rest))) {
+      if (/^<a(?:\s|\/?>)/i.test(m[0])) inLink = true; else if (/^<\/a\s*>/i.test(m[0])) inLink = false;
+      put(m[0]); i += m[0].length; continue;
+    }
     if ((m = /^<([A-Za-z][A-Za-z+.-]{1,31}:[^ <>]*)>/i.exec(rest))) { const href = uri(m[1]); put(`<a href="${esc(href)}">${esc(m[1])}</a>`); i += m[0].length; continue; }
     if ((m = /^<([A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+)>/.exec(rest))) { put(`<a href="mailto:${esc(m[1])}">${esc(m[1])}</a>`); i += m[0].length; continue; }
     const image = source[i] === '!' && source[i + 1] === '[';
@@ -190,12 +193,12 @@ function inline(source, refs = Object.create(null), depth = 0, links = {}, inLin
     }
     if ((m = /^(~{1,2})(?!~)(?=\S)([\s\S]*?\S)(?<!~)\1(?!~)/.exec(rest))) { put(`<del>${inline(m[2], refs, depth + 1)}</del>`); i += m[0].length; continue; }
     if ((m = /^~+/.exec(rest))) { text += m[0]; i += m[0].length; continue; }
-    if (!/[A-Za-z0-9.+_-]/.test(source[i - 1] ?? '') && (m = /^(?:(mailto|xmpp):)?([A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.[A-Za-z]+)(?![A-Za-z0-9_-])/i.exec(rest))) {
+    if (!inAnchor && !/[A-Za-z0-9.+_-]/.test(source[i - 1] ?? '') && (m = /^(?:(mailto|xmpp):)?([A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.[A-Za-z]+)(?![A-Za-z0-9_-])/i.exec(rest))) {
       let label = m[0];
       if (m[1]?.toLowerCase() === 'xmpp') label += (/^\/[A-Za-z0-9@._+-]+/.exec(rest.slice(label.length))?.[0] ?? '').replace(/[._]+$/, '');
       put(`<a href="${esc(m[1] ? label : `mailto:${label}`)}">${esc(label)}</a>`); i += label.length; continue;
     }
-    if (!inLink && (m = /^(?:[Hh][Tt][Tt][Pp][Ss]?:\/\/|www\.)[^\s<>]+/.exec(rest))) { let u = m[0].replace(/&[A-Za-z0-9]+;$/, '').replace(/[?!.,;:*_~"']+$/, ''); while (u.endsWith(')') && (u.match(/\)/g)?.length ?? 0) > (u.match(/\(/g)?.length ?? 0)) u = u.slice(0, -1);  const href = u.startsWith('www.') ? `http://${u}` : u; put(`<a href="${esc(uri(href))}">${esc(u)}</a>`); i += u.length; continue; }
+    if (!inLink && !inAnchor && (m = /^(?:[Hh][Tt][Tt][Pp][Ss]?:\/\/|www\.)[^\s<>]+/.exec(rest))) { let u = m[0]; for (;;) { const was = u; u = u.replace(/&[A-Za-z0-9]+;$/, ''); while (u.endsWith(')') && (u.match(/\)/g)?.length ?? 0) > (u.match(/\(/g)?.length ?? 0)) u = u.slice(0, -1); u = u.replace(/[?!.,;:*_~"']+$/, ''); if (u === was) break; }  const href = u.startsWith('www.') ? `http://${u}` : u; put(`<a href="${esc(uri(href))}">${esc(u)}</a>`); i += u.length; continue; }
     text += source[i++];
   }
   return resolveEmphasis(text).replace(/￼/g, () => slots.shift());
@@ -379,4 +382,7 @@ function blocks(input, shared, tight = null, spacing) {
   return html.join('');
 }
 
-export function parse(markdown) { return blocks(String(markdown)); }
+// Marked's lexer carries one inLink flag through the whole document: a raw "<a>"
+// left unclosed stops every later bare URL and e-mail from linking.
+let inLink = false;
+export function parse(markdown) { inLink = false; try { return blocks(String(markdown)); } finally { inLink = false; } }
