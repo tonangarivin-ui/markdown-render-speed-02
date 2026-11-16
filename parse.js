@@ -235,11 +235,11 @@ function blocks(input, shared, tight = null, spacing) {
     });
   };
   const lines = input.replace(/\r\n?/g, '\n').replace(/\0/g, '�').split('\n').map(detab);
-  const refs = shared ?? Object.create(null);
-  for (let n = 0; n < lines.length;) { const d = definition(lines, n); if (!d) { n++; continue; } refs[normalize(d.label)] = { url: d.url, title: d.title }; lines.splice(n, d.used, ...Array(d.used).fill('')); n += d.used; }
+  const refs = shared ?? Object.create(null), definitions = new Set();
+  for (let n = 0; n < lines.length;) { const d = definition(lines, n); if (!d) { n++; continue; } definitions.add(n); refs[normalize(d.label)] = { url: d.url, title: d.title }; lines.splice(n, d.used, ...Array(d.used).fill('')); n += d.used; }
   const html = [], blank = n => /^\s*$/.test(lines[n] ?? ''); let i = 0;
   while (i < lines.length) {
-    if (blank(i)) { if (spacing && html.length && lines.slice(i).some(s => /\S/.test(s))) spacing.separated = true; i++; continue; } let line = lines[i], m;
+    if (blank(i)) { if (spacing && html.length && (definitions.has(i) || lines.slice(i).some(s => /\S/.test(s)))) spacing.separated = true; i++; continue; } let line = lines[i], m;
     const endHTML = htmlBlockStart(line);
     if (endHTML !== false) { const b = [line]; i++; while (i < lines.length && !endHTML.test(b.join('\n')) && !(endHTML.source === '^$' && blank(i))) b.push(lines[i++]); html.push(b.join('\n') + (i < lines.length && (!blank(i) || i === lines.length - 1) ? '\n' : '')); continue; }
     if (/^ {4}/.test(line)) { const b = []; while (i < lines.length && (/^ {4}/.test(lines[i]) || blank(i))) { b.push(/^ {4}/.test(lines[i]) ? lines[i].slice(4) : ''); i++; } while (b.at(-1) === '') b.pop(); html.push(`<pre><code>${esc(b.join('\n'))}\n</code></pre>\n`); continue; }
