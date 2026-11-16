@@ -12,6 +12,15 @@ for (const [markdown, html] of [
   ['~~we ~~render~~ less~~', '<p><del>we <del>render</del> less</del></p>\n'],
   ['https://a.test)](b)', '<p><a href="https://a.test)%5D(b)">https://a.test)](b)</a></p>\n'],
   ['_used first@sprout.example.com_', '<p><em>used <a href="mailto:first@sprout.example.com">first@sprout.example.com</a></em></p>\n'],
+  ['  ~~~x\n  a\n  ~~~', '<pre><code class="language-x">  a\n</code></pre>\n'],
+  ['  ```x\n\ta\n  ```', '<pre><code class="language-x">a\n</code></pre>\n'],
+  ['*a **b**c*', '<p>*a <strong>b</strong>c*</p>\n'],
+  ['**a *b*c***', '<p><strong>a <em>b</em>c*</strong></p>\n'],
+  ['[a _b `` c ` d ``_](<https://e.dev/u v>)', '<p>[a _b <code>c ` d</code>_](&lt;<a href="https://e.dev/u">https://e.dev/u</a> v&gt;)</p>\n'],
+  ['a <a href="x"> b\n\na@b.com', '<p>a <a href="x"> b</p>\n<p>a@b.com</p>\n'],
+  ['[a]\n\n```\n[a]: /url', '<p>[a]</p>\n<pre><code>[a]: /url\n</code></pre>\n'],
+  ['> a\n>     b', '<blockquote>\n<p>a\n    b</p>\n</blockquote>\n'],
+  ['- a\n\n  b\nc', '<ul>\n<li><p>a</p>\n<p>b\nc</p>\n</li>\n</ul>\n'],
 ]) assert.equal(parse(markdown), html, markdown);
 
 const dir = mkdtempSync(new URL('./.regression-', import.meta.url));
