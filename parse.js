@@ -343,7 +343,7 @@ function blocks(input, shared, tight = null, spacing) {
       const contents = items.map(({ body }) => { const spacing = {}; const value = blocks(body.join('\n'), refs, false, spacing); if (spacing.separated) loose = true; return value; });
       const rendered = items.map(({ check, body }, n) => {
         const value = loose ? contents[n] : blocks(body.join('\n'), refs, true);
-        return `<li>${check}${value}</li>`;
+        return `<li>${loose && check ? value.replace(/^<p>/, `<p>${check}`) : check + value}</li>`;
       });
       html.push(`<${tag}${ordered && start !== 1 ? ` start="${start}"` : ''}>\n${rendered.join('\n')}\n</${tag}>\n`); continue;
     }
