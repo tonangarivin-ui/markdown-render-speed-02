@@ -284,10 +284,10 @@ function blocks(input, shared) {
             if (/^( {0,3})([*+-]|\d{1,9}[.)])[ \t]+/.test(next) || nextIndent >= indent) sawBlank = true;
             body.push(''); i++; continue;
           }
-          if (/^( {0,3})([*+-]|\d{1,9}[.)])[ \t]+/.test(lines[i])) break;
           const lead = (lines[i].match(/^ */) ?? [''])[0].length;
           if (lead >= indent) body.push(lines[i].slice(indent));
-          else if (!sawBlank) body.push(lines[i]);
+          else if (/^( {0,3})([*+-]|\d{1,9}[.)])[ \t]+/.test(lines[i])) break;
+          else if (!sawBlank) body.push(lines[i].trimStart());
           else break;
           i++;
         }
