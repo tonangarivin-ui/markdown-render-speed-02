@@ -153,6 +153,48 @@ function resolveEmphasis(raw, boundaries = []) {
 function inline(source, refs = Object.create(null), depth = 0, links = {}, inAnchor = false) {
   if (depth > 32) return esc(source);
   const slots = [], boundaries = [], slot = (value, boundary) => { boundaries.push(boundary); return `${slots.push(value) - 1}`; };
+  const mask = source.split('');
+  // Hide punctuation escapes and the shorter backticks enclosed by a code pair.
+  for (let at = 0; at < source.length; at++) {
+    if (source[at] === '\\') { if (punct(source[at + 1])) mask[at] = mask[++at] = '+'; continue; }
+    if (source[at] !== '`') continue;
+    let width = 1; while (source[at + width] === '`') width++;
+    let end = -1;
+    for (let x = at + width; x < source.length; x++) {
+      if (source[x] !== '`') continue;
+      let n = 1; while (source[x + n] === '`') n++;
+      if (n === width) { end = x; break; }
+      x += n - 1;
+    }
+    if (end >= 0) {
+      for (let x = at + width; x < end; x++) if (mask[x] === '`') mask[x] = '+';
+      at = end + width - 1;
+    } else at += width - 1;
+  }
+  const masked = mask.join(''), hidden = new Set();
+  const hide = (a, b) => { for (let x = a; x < b; x++) hidden.add(x); };
+  for (let at = 0; at < masked.length; at++) {
+    if (masked[at] === '[') {
+      let x = at + 1;
+      for (; x < masked.length && !/[\[\]]/.test(masked[x]); x++) {
+        if (masked[x] !== '`') continue;
+        let end = x; while (masked[end] === '`') end++;
+        const close = masked.indexOf('`', end);
+        if (close <= end) break;
+        let after = close; while (masked[after] === '`') after++;
+        if (after - close !== end - x) break;
+        x = after - 1;
+      }
+      const tail = masked[x] === ']' && masked[x + 1] === '(' && linkTail(masked, x + 1);
+      if (tail) { hide(at, tail.end); at = tail.end - 1; continue; }
+    }
+    if (masked[at] !== '`' || masked[at - 1] === '`') continue;
+    let end = at; while (masked[end] === '`') end++;
+    const close = masked.indexOf('`', end);
+    if (close <= end) continue;
+    let after = close; while (masked[after] === '`') after++;
+    if (after - close === end - at) { hide(at, after); at = after - 1; }
+  }
   let text = '', i = 0;
   const put = (value, boundary) => { text += slot(value, boundary); };
   while (i < source.length) {
@@ -220,7 +262,8 @@ function inline(source, refs = Object.create(null), depth = 0, links = {}, inAnc
       put(`<a href="${esc(m[1] ? label : `mailto:${label}`)}">${esc(label)}</a>`); i += label.length; continue;
     }
     if (!inLink && !inAnchor && (m = /^(?:[Hh][Tt][Tt][Pp][Ss]?:\/\/|www\.)[^\s<>]+/.exec(rest))) { let u = m[0]; const parentheses = []; for (let p = 0; p < u.length; p++) { if (u[p] === '(') parentheses.push(p); else if (u[p] === ')') parentheses.pop(); } if (parentheses.length) u = u.slice(0, parentheses[0]); for (;;) { const was = u; u = u.replace(/&[A-Za-z0-9]+;$/, ''); while (u.endsWith(')') && (u.lastIndexOf('(') < 0 || u.slice(u.lastIndexOf('(') + 1, -1).includes(')'))) u = u.slice(0, -1); u = u.replace(/[?!.,;:*_~"']+$/, ''); if (u === was) break; }  const href = u.startsWith('www.') ? `http://${u}` : u; put(`<a href="${esc(uri(href))}">${esc(u)}</a>`, u); i += u.length; continue; }
-    text += source[i++];
+    if (hidden.has(i) && /[*_]/.test(source[i])) put(source[i++]);
+    else text += source[i++];
   }
   return resolveEmphasis(text, boundaries).replace(/￼/g, () => slots.shift());
 }
