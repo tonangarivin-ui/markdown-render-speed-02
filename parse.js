@@ -314,7 +314,7 @@ function blocks(input, shared, tight = null, spacing) {
       html.push(`<${tag}${ordered && start !== 1 ? ` start="${start}"` : ''}>\n${rendered.join('\n')}\n</${tag}>\n`); continue;
     }
     const para = [line]; i++;
-    while (i < lines.length && !blank(i) && !/^( {0,3}(?:#{1,6})(?:[ \t]|$)| {0,3}>| {0,3}(?:[*+-]|\d+[.)])[ \t]+| {0,3}(?:`{3,}|~{3,}))/.test(lines[i])) {
+    while (i < lines.length && !blank(i) && !/^( {0,3}(?:#{1,6})(?:[ \t]|$)| {0,3}>| {0,3}(?:[*+-]|1[.)])[ \t]+\S| {0,3}(?:`{3,}|~{3,}))/.test(lines[i])) {
       if (/^ {0,3}(?:=+|-+)[ \t]*$/.test(lines[i])) { const level = lines[i].trim()[0] === '=' ? 1 : 2; html.push(`<h${level}>${inline(para.join('\n').trim(), refs)}</h${level}>\n`); i++; para.length = 0; break; }
       if (/^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/.test(lines[i])) { html.push(`<p>${inline(para.join('\n'), refs)}</p>\n<hr>\n`); i++; para.length = 0; break; }
       para.push(tight === null ? lines[i++] : lines[i++].replace(/^ +/, ''));
