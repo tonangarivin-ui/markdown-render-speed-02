@@ -70,13 +70,13 @@ function labelClose(s, start) {
     if (s[i] === '<') { const token = rawHTML.exec(s.slice(i)) ?? /^<[A-Za-z][A-Za-z+.-]{1,31}:[^ <>]*>/.exec(s.slice(i)); if (token) { i += token[0].length - 1; continue; } }
     if (s[i] === '`') {
       let end = i; while (s[end] === '`') end++;
-      const width = end - i;
-      for (let j = end; j < s.length; j++) {
-        if (s[j] !== '`') continue;
-        let k = j; while (s[k] === '`') k++;
-        if (k - j === width) { i = k - 1; break; }
-        j = k - 1;
-      }
+      // Link labels pair adjacent backtick runs lexically; inline code later
+      // requires equal widths. A final multi-backtick run may precede ']'.
+      if (end - i >= 2 && s[end] === ']') { i = end - 1; continue; }
+      let next = s.indexOf('`', end);
+      if (next < 0) return -1;
+      while (s[next] === '`') next++;
+      i = next - 1;
     }
     if (s[i] === '[') depth++;
     else if (s[i] === ']') { if (!depth) return i; depth--; }
