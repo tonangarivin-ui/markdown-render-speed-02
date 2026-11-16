@@ -208,7 +208,7 @@ function definition(lines, at) {
   return i === source.length ? { label, url, title, used } : null;
 }
 
-function htmlBlockStart(line) {
+function htmlBlockStart(line, interrupt = false) {
   const special = /^ {0,3}<(script|pre|style|textarea)(?:\s|>|$)/i.exec(line);
   if (special) return new RegExp(`</${special[1]}\\s*>`, 'i');
   if (/^ {0,3}<!--/.test(line)) return /-->/;
@@ -216,7 +216,7 @@ function htmlBlockStart(line) {
   if (/^ {0,3}<!\[CDATA\[/.test(line)) return /\]\]>/;
   if (/^ {0,3}<![A-Z]/.test(line)) return />/;
   if (/^ {0,3}<\/?(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|ol|p|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)(?:\s|\/?>|$)/i.test(line)) return /^$/;
-  if (completeTag.test(line)) return /^$/;
+  if (!interrupt && completeTag.test(line)) return /^$/;
   return false;
 }
 
@@ -241,7 +241,7 @@ function blocks(input, shared, tight = null, spacing) {
   while (i < lines.length) {
     if (blank(i)) { if (spacing && html.length && lines.slice(i).some(s => /\S/.test(s))) spacing.separated = true; i++; continue; } let line = lines[i], m;
     const endHTML = htmlBlockStart(line);
-    if (endHTML !== false) { const b = [line]; i++; while (i < lines.length && !endHTML.test(b.join('\n')) && !(endHTML.source === '^$' && blank(i))) b.push(lines[i++]); const boundary = endHTML.source === '^$' && blank(i); html.push(b.join('\n') + (!boundary || i === lines.length - 1 ? '\n' : '')); continue; }
+    if (endHTML !== false) { const b = [line]; i++; while (i < lines.length && !endHTML.test(b.join('\n')) && !(endHTML.source === '^$' && blank(i))) b.push(lines[i++]); html.push(b.join('\n') + (i < lines.length && (!blank(i) || i === lines.length - 1) ? '\n' : '')); continue; }
     if (/^ {4}/.test(line)) { const b = []; while (i < lines.length && (/^ {4}/.test(lines[i]) || blank(i))) { b.push(/^ {4}/.test(lines[i]) ? lines[i].slice(4) : ''); i++; } while (b.at(-1) === '') b.pop(); html.push(`<pre><code>${esc(b.join('\n'))}\n</code></pre>\n`); continue; }
     if ((m = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line))) { const fence = m[1], info = m[2].trim().split(/\s+/)[0], b = [], end = lines.length - (lines.at(-1) === '' ? 1 : 0); i++; const closer = new RegExp(`^ {0,3}${fence[0]}{${fence.length},}[ \\t]*$`); while (i < end && !closer.test(lines[i])) b.push(lines[i++]); if (i < lines.length) i++; html.push(`<pre><code${info ? ` class="language-${esc(info)}"` : ''}>${esc(b.join('\n'))}${b.length ? '\n' : ''}</code></pre>\n`); continue; }
     if ((m = /^ {0,3}(#{1,6})(?:[ \t]+(.*?)[ \t]*|[ \t]*)$/.exec(line))) {
@@ -314,7 +314,7 @@ function blocks(input, shared, tight = null, spacing) {
       html.push(`<${tag}${ordered && start !== 1 ? ` start="${start}"` : ''}>\n${rendered.join('\n')}\n</${tag}>\n`); continue;
     }
     const para = [line]; i++;
-    while (i < lines.length && !blank(i) && !/^( {0,3}(?:#{1,6})(?:[ \t]|$)| {0,3}>| {0,3}(?:[*+-]|1[.)])[ \t]+\S| {0,3}(?:`{3,}|~{3,}))/.test(lines[i])) {
+    while (i < lines.length && !blank(i) && htmlBlockStart(lines[i], true) === false && !/^( {0,3}(?:#{1,6})(?:[ \t]|$)| {0,3}>| {0,3}(?:[*+-]|1[.)])[ \t]+\S| {0,3}(?:`{3,}|~{3,}))/.test(lines[i])) {
       if (/^ {0,3}(?:=+|-+)[ \t]*$/.test(lines[i])) { const level = lines[i].trim()[0] === '=' ? 1 : 2; html.push(`<h${level}>${inline(para.join('\n').trim(), refs)}</h${level}>\n`); i++; para.length = 0; break; }
       if (/^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/.test(lines[i])) { html.push(`<p>${inline(para.join('\n'), refs)}</p>\n<hr>\n`); i++; para.length = 0; break; }
       para.push(tight === null ? lines[i++] : lines[i++].replace(/^ +/, ''));
