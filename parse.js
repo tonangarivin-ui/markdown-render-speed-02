@@ -229,7 +229,10 @@ function blocks(input, shared, tight = null, spacing) {
       if (line[i] === '\t') col += 4 - col % 4; else col++;
       i++;
     }
-    return ' '.repeat(col) + line.slice(i);
+    return (' '.repeat(col) + line.slice(i)).replace(/^( {0,3}(?:>|[*+-]|\d{1,9}[.)]))([ \t]+)/, (_, marker, padding) => {
+      let column = marker.length;
+      return marker + padding.replace(/[ \t]/g, c => { const width = c === '\t' ? 4 - column % 4 : 1; column += width; return ' '.repeat(width); });
+    });
   };
   const lines = input.replace(/\r\n?/g, '\n').replace(/\0/g, '�').split('\n').map(detab);
   const refs = shared ?? Object.create(null);
