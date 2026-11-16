@@ -1,7 +1,7 @@
 const esc = s => s.replace(/&#\d{1,7};|&#[xX][\da-fA-F]{1,6};|&[A-Za-z0-9_]+;|[&<>"']/g, c => c === '&' ? '&amp;' : ({ '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] ?? c));
 const punct = c => !!c && /[\p{P}\p{S}]/u.test(c);
 const space = c => !c || /\s/u.test(c);
-const normalize = s => s.replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/g, '$1').replace(/[\t\n ]+/g, ' ').trim().toLowerCase();
+const normalize = s => s.replace(/[\t\n ]+/g, ' ').trim().toLowerCase().toUpperCase();
 // marked percent-encodes link destinations with encodeURI, then restores literal
 // percent signs (which encodeURI turned into %25) back to '%'.
 const uri = s => encodeURI(s).replace(/%25/g, '%');
