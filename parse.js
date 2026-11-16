@@ -105,11 +105,13 @@ function resolveEmphasis(raw) {
       let open;
       for (let o = c - 1; o >= 0; o--) {
         const candidate = ds[o];
-        if (!candidate.open || candidate.ch !== close.ch || !candidate.n) continue;
+        if (candidate.dead || !candidate.open || candidate.ch !== close.ch || !candidate.n) continue;
         if ((candidate.close || close.open) && (candidate.n + close.n) % 3 === 0 && (candidate.n % 3 || close.n % 3)) continue;
         open = candidate; break;
       }
       if (!open) break;
+      // A match consumes every delimiter between the pair: they can never be used.
+      for (let x = ds.indexOf(open) + 1; ds[x] !== close; x++) ds[x].dead = true;
       const n = open.n >= 2 && close.n >= 2 ? 2 : 1;
       const a = open.start + open.n - n, b = close.start + close.right;
       add(opens, a, n); add(closes, b + n, n);
