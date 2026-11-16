@@ -125,7 +125,7 @@ function resolveEmphasis(raw, boundaries = []) {
               else balance -= run.left;
             }
           }
-          if (deferred && balance > close.n) continue;
+          if (deferred && balance > 1) continue;
         }
         if (candidate.ch !== '~' && (candidate.close || close.open) && (candidate.n + close.n) % 3 === 0 && (candidate.n % 3 || close.n % 3)) continue;
         open = candidate; break;
