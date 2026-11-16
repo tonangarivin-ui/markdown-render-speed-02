@@ -355,7 +355,7 @@ function blocks(input, shared, tight = null, spacing) {
           const lead = (lines[i].match(/^ */) ?? [''])[0].length;
           if (lead >= indent) body.push(lines[i].slice(indent));
           else if (listMarker.test(lines[i]) || /^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/.test(lines[i])) break;
-          else if (!sawBlank) body.push(lines[i]);
+          else if ((itemFence ? !/^ {0,3}(`{3,}(?!`)[^`]*|~{3,}.*)$/.test(previous) : !sawBlank && !/^ {0,3}(?:`{3,}|~{3,}|#{1,6}(?:[ \t]|$)|>)/.test(lines[i]))) body.push(lines[i]);
           else break;
           i++;
         }
