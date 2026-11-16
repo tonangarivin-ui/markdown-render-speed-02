@@ -128,9 +128,9 @@ function inline(source, refs = Object.create(null), depth = 0) {
   const put = value => { text += slot(value); };
   while (i < source.length) {
     const rest = source.slice(i); let m;
-    if ((m = /^\\\n/.exec(rest))) { put('<br>'); i += 2; continue; }
+    if ((m = /^\\\n[ \t]*/.exec(rest))) { put('<br>'); i += m[0].length; continue; }
     if ((m = /^\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/.exec(rest))) { put(esc(m[1])); i += m[0].length; continue; }
-    if ((m = /^ {2,}\n/.exec(rest))) { put('<br>'); i += m[0].length; continue; }
+    if ((m = /^ {2,}\n[ \t]*/.exec(rest))) { put('<br>'); i += m[0].length; continue; }
     if (source[i] === '`') {
       let n = 1; while (source[i + n] === '`') n++;
       let end = -1;
