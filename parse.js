@@ -16,7 +16,7 @@ const entity = s => s.replace(/&#(?:x[\da-f]{1,6}|\d{1,7});/gi, m => {
 
 function destination(s) {
   if (s.startsWith('<') && s.endsWith('>') && !/[\n<>]/.test(s.slice(1, -1))) return s.slice(1, -1);
-  if (/[\s<>]/.test(s)) return null;
+  if (/[ \t\n<>]/.test(s)) return null;
   let d = 0;
   for (let i = 0; i < s.length; i++) { if (s[i] === '\\') i++; else if (s[i] === '(') d++; else if (s[i] === ')' && --d < 0) return null; }
   return d ? null : s;
@@ -38,7 +38,7 @@ function linkTail(s, open) {
       if (s[i] === '\\') { i += 2; continue; }
       if (s[i] === '(') depth++;
       else if (s[i] === ')') { if (!depth) break; depth--; }
-      else if (/\s/.test(s[i])) break;
+      else if (/[ \t\n]/.test(s[i])) break;
       i++;
     }
     if (depth) return null;
