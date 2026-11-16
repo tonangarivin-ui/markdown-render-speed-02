@@ -294,7 +294,7 @@ function blocks(input, shared, tight = null, spacing) {
       let loose = false;
       while (i < lines.length) {
         const item = listMarker.exec(lines[i]);
-        if (!item || /^\d/.test(item[2]) !== ordered || item[2].at(-1) !== m[2].at(-1)) break;
+        if (!item || /^\d/.test(item[2]) !== ordered || item[2].at(-1) !== m[2].at(-1) || /^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/.test(lines[i])) break;
         const marker = item[1].length + item[2].length, pad = (item[3] ?? ' ').replace(/\t/g, '    ').length;
         const empty = !(item[4] ?? '').trim();
         const indent = empty || pad > 4 ? marker + 1 : marker + pad, body = [empty ? '' : `${pad > 4 ? ' '.repeat(pad - 1) : ''}${item[4]}`]; let sawBlank = false; i++;
@@ -308,7 +308,7 @@ function blocks(input, shared, tight = null, spacing) {
           }
           const lead = (lines[i].match(/^ */) ?? [''])[0].length;
           if (lead >= indent) body.push(lines[i].slice(indent));
-          else if (listMarker.test(lines[i])) break;
+          else if (listMarker.test(lines[i]) || /^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/.test(lines[i])) break;
           else if (!sawBlank) body.push(lines[i]);
           else break;
           i++;
