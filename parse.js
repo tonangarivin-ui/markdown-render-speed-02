@@ -326,7 +326,7 @@ function htmlBlockStart(line, interrupt = false) {
 }
 
 const inlineQueue = Symbol('inlineQueue');
-function blocks(input, shared, tight = null, spacing, quoted = false) {
+function blocks(input, shared, tight = null, spacing, quoted = false, lazyLines = new Set()) {
   const inline = (source, refs) => `${refs[inlineQueue].push(source) - 1}`;
   // Expand tabs to 4-column stops in the leading whitespace prefix only, so
   // indentation decisions see 4-column tabs while code content keeps raw tabs.
@@ -359,7 +359,7 @@ function blocks(input, shared, tight = null, spacing, quoted = false) {
     }
     if (/^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/.test(line)) { html.push('<hr>\n'); i++; continue; }
     if (/^ {0,3}>/.test(line)) {
-      const b = []; let paragraph = false, fence, fenceDepth;
+      const b = [], lazyContent = new Set(); let paragraph = false, fence, fenceDepth;
       const startsBlock = s => /^ {0,3}(?:#{1,6}(?:[ \t]|$)|>|`{3,}(?!`)[^`]*$|~{3,}|[*+-][ \t]+\S|1[.)][ \t]+\S|(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$)/.test(s) || htmlBlockStart(s) !== false;
       while (i < lines.length) {
         if (/^ {0,3}>/.test(lines[i])) {
@@ -370,10 +370,10 @@ function blocks(input, shared, tight = null, spacing, quoted = false) {
           if (fence) { if (new RegExp(`^ {0,3}${fence[0]}{${fence.length},}[ \\t]*$`).test(inner)) fence = undefined; paragraph = false; }
           else if ((m = /^ {0,3}(`{3,}(?!`)[^`]*$|~{3,})/.exec(inner))) { fence = /^(`+|~+)/.exec(m[1])[0]; fenceDepth = quoteDepth; paragraph = false; }
           else paragraph = !/^\s*$/.test(inner) && !startsBlock(inner) && !/^ {0,3}(?:=+|-+)[ \t]*$/.test(inner) && (paragraph || !/^ {4}/.test(inner));
-        } else if (paragraph && !blank(i) && (!startsBlock(lines[i]) || /^ {0,3}=+[ \t]*$/.test(lines[i]))) { const lazy = lines[i++]; b.push(/^ {4}/.test(lazy) ? lazy : /^(?:=+|-+)[ \t]*$/.test(lazy) ? `    ${lazy}` : lazy); }
+        } else if (paragraph && !blank(i) && (!startsBlock(lines[i]) || /^ {0,3}=+[ \t]*$/.test(lines[i]))) { const lazy = lines[i++]; lazyContent.add(b.length); b.push(/^ {4}/.test(lazy) ? lazy : /^(?:=+|-+)[ \t]*$/.test(lazy) ? `    ${lazy}` : lazy); }
         else break;
       }
-      html.push(`<blockquote>\n${blocks(b.join('\n'), refs, null, undefined, true)}</blockquote>\n`); continue;
+      html.push(`<blockquote>\n${blocks(b.join('\n'), refs, null, undefined, true, lazyContent)}</blockquote>\n`); continue;
     }
     const cells = s => s.trim().replace(/^\||\|$/g, '').split(/(?<!\\)\|/).map(x => x.trim().replace(/\\\|/g, '|'));
     if (i + 1 < lines.length && line.includes('|') && /^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$/.test(lines[i + 1])) {
@@ -432,7 +432,7 @@ function blocks(input, shared, tight = null, spacing, quoted = false) {
     while (i < lines.length && (!blank(i) || (quoted && i === lines.length - 1 && lines[i] !== '')) && htmlBlockStart(lines[i], true) === false && !new RegExp(`^( {0,3}(?:#{1,6})(?:[ \\t]|$)| {0,3}>| {0,3}(?:[*+-]|${tight !== null ? '\\d{1,9}' : '1'}[.)])[ \\t]+\\S| {0,3}(?:\`{3,}(?!\`)[^\`]*$|~{3,}))`).test(lines[i])) {
       if (/^ {0,3}(?:=+|-+)[ \t]*$/.test(lines[i])) { const level = lines[i].trim()[0] === '=' ? 1 : 2; html.push(`<h${level}>${inline(para.join('\n').trim(), refs)}</h${level}>\n`); i++; para.length = 0; break; }
       if (/^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/.test(lines[i])) { html.push(`<p>${inline(para.join('\n'), refs)}</p>\n<hr>\n`); i++; para.length = 0; break; }
-      para.push((tight !== null || quoted) && /^ {4}(?! *(?:=+|-+)[ \t]*$)/.test(lines[i]) ? lines[i++].replace(/^ +/, '') : lines[i++]);
+      para.push((tight !== null || lazyLines.has(i)) && /^ {4}(?! *(?:=+|-+)[ \t]*$)/.test(lines[i]) ? lines[i++].replace(/^ +/, '') : lines[i++]);
     }
     if (para.length) html.push(tight ? inline(para.join('\n'), refs) : `<p>${inline(para.join('\n'), refs)}</p>\n`);
   }
