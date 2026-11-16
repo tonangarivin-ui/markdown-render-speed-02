@@ -276,13 +276,13 @@ function blocks(input, shared, tight = null, spacing) {
       html.push(`<blockquote>\n${blocks(b.join('\n'), refs)}</blockquote>\n`); continue;
     }
     const cells = s => s.trim().replace(/^\||\|$/g, '').split(/(?<!\\)\|/).map(x => x.trim().replace(/\\\|/g, '|'));
-    if (i + 1 < lines.length && line.includes('|') && /^(?:\s*\|?\s*:?-+:?\s*)+(?:\|\s*:?-+:?\s*)+\|?\s*$/.test(lines[i + 1])) {
+    if (i + 1 < lines.length && line.includes('|') && /^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$/.test(lines[i + 1])) {
       const head = cells(line), defs = cells(lines[i + 1]);
       if (head.length === defs.length) {
         const align = defs.map(x => /^:.*:$/.test(x) ? 'center' : /^:/.test(x) ? 'left' : /:$/.test(x) ? 'right' : '');
         const row = (xs, tag) => `<tr>\n${head.map((_, n) => `<${tag}${align[n] ? ` align="${align[n]}"` : ''}>${inline(xs[n] ?? '', refs)}</${tag}>`).join('\n')}\n</tr>`;
-        const rows = []; i += 2; while (i < lines.length && lines[i].includes('|') && !blank(i)) rows.push(row(cells(lines[i++]), 'td'));
-        html.push(`<table>\n<thead>\n${row(head, 'th')}\n</thead>\n<tbody>${rows.join('\n')}\n</tbody></table>\n`); continue;
+        const rows = []; i += 2; while (i < lines.length && !blank(i) && !/^ {0,3}(?:>|#{1,6}(?:\s|$)|`{3,}|~{3,})/.test(lines[i]) && !listMarker.test(lines[i]) && htmlBlockStart(lines[i], true) === false) rows.push(row(cells(lines[i++]), 'td'));
+        html.push(`<table>\n<thead>\n${row(head, 'th')}\n</thead>\n${rows.length ? `<tbody>${rows.join('\n')}\n</tbody>` : ''}</table>\n`); continue;
       }
     }
     if ((m = listMarker.exec(line))) {
