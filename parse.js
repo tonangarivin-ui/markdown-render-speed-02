@@ -289,7 +289,7 @@ function blocks(input, shared, tight = null, spacing) {
             const next = lines[i + 1] ?? '', nextIndent = (next.match(/^ */) ?? [''])[0].length;
             if (!/^\s*$/.test(next) && !listMarker.test(next) && nextIndent < indent) break;
             if (listMarker.test(next) || nextIndent >= indent) sawBlank = true;
-            if (body.at(-1) !== '') body.push(''); i++; continue;
+            if (body.at(-1) !== '' || /^ {4}/.test(body.findLast(s => /\S/.test(s)) ?? '')) body.push(''); i++; continue;
           }
           const lead = (lines[i].match(/^ */) ?? [''])[0].length;
           if (lead >= indent) body.push(lines[i].slice(indent));
