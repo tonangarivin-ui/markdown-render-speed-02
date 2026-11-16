@@ -2,7 +2,9 @@ const esc = s => s.replace(/&#\d{1,7};|&#[xX][\da-fA-F]{1,6};|&[A-Za-z0-9_]+;|[&
 const punct = c => !!c && /[\p{P}\p{S}]/u.test(c);
 const space = c => !c || /\s/u.test(c);
 const normalize = s => s.replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/g, '$1').replace(/[\t\n ]+/g, ' ').trim().toLowerCase();
-const uri = s => s;
+// marked percent-encodes link destinations with encodeURI, then restores literal
+// percent signs (which encodeURI turned into %25) back to '%'.
+const uri = s => encodeURI(s).replace(/%25/g, '%');
 const alt = s => s.replace(/`+([^`]*?)`+/g, '$1').replace(/[*!_~]/g, '').replace(/\n/g, ' ');
 
 // Numeric references are regular Unicode scalar values; named references are decoded by the browser
@@ -145,7 +147,7 @@ function inline(source, refs = Object.create(null), depth = 0) {
           if (source[end] === '[') { const r = labelClose(source, end + 1); if (r >= 0) { ref = source.slice(end + 1, r) || label; end = r + 1; } }
           const def = refs[normalize(ref)]; if (def) { url = def.url; title = def.title; }
         }
-        if (url != null) { url = uri(entity(url).replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/g, '$1')); const attr = title !== undefined ? ` title="${esc(entity(title))}"` : ''; const body = inline(label, refs, depth + 1); put(image ? `<img src="${esc(url)}" alt="${esc(alt(body.replace(/<[^>]*>/g, '')))}"${attr}>` : `<a href="${esc(url)}"${attr}>${body}</a>`); i = end; continue; }
+        if (url != null) { url = uri(entity(url).replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/g, '$1')); const attr = title !== undefined ? ` title="${esc(entity(title).replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/g, '$1'))}"` : ''; const body = inline(label, refs, depth + 1); put(image ? `<img src="${esc(url)}" alt="${esc(alt(body.replace(/<[^>]*>/g, '')))}"${attr}>` : `<a href="${esc(url)}"${attr}>${body}</a>`); i = end; continue; }
       }
     }
     if ((m = /^~~(?=\S)([\s\S]*?\S)~~/.exec(rest))) { put(`<del>${inline(m[1], refs, depth + 1)}</del>`); i += m[0].length; continue; }
