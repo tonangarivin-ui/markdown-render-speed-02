@@ -218,7 +218,7 @@ function htmlBlockStart(line) {
   return false;
 }
 
-function blocks(input, shared) {
+function blocks(input, shared, tight = false) {
   // Expand tabs to 4-column stops in the leading whitespace prefix only, so
   // indentation decisions see 4-column tabs while code content keeps raw tabs.
   const detab = line => {
@@ -299,8 +299,7 @@ function blocks(input, shared) {
         items.push({ check, body });
       }
       const rendered = items.map(({ check, body }) => {
-        let value = blocks(body.join('\n'), refs);
-        if (!loose && /^<p>[\s\S]*<\/p>\n$/.test(value)) value = value.slice(3, -5);
+        const value = blocks(body.join('\n'), refs, !loose);
         return `<li>${check}${value}</li>`;
       });
       html.push(`<${tag}${ordered && start !== 1 ? ` start="${start}"` : ''}>\n${rendered.join('\n')}\n</${tag}>\n`); continue;
@@ -311,7 +310,7 @@ function blocks(input, shared) {
       if (/^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/.test(lines[i])) { html.push(`<p>${inline(para.join('\n'), refs)}</p>\n<hr>\n`); i++; para.length = 0; break; }
       para.push(lines[i++]);
     }
-    if (para.length) html.push(`<p>${inline(para.join('\n'), refs)}</p>\n`);
+    if (para.length) html.push(tight ? inline(para.join('\n'), refs) : `<p>${inline(para.join('\n'), refs)}</p>\n`);
   }
   return html.join('');
 }
