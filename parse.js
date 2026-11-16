@@ -314,7 +314,7 @@ function blocks(input, shared, tight = null, spacing) {
           if (fence) { if (new RegExp(`^ {0,3}${fence[0]}{${fence.length},}[ \\t]*$`).test(inner)) fence = undefined; paragraph = false; }
           else if ((m = /^ {0,3}(`{3,}|~{3,})/.exec(inner))) { fence = m[1]; paragraph = false; }
           else paragraph = !/^\s*$/.test(inner) && !startsBlock(inner) && !/^ {0,3}(?:=+|-+)[ \t]*$/.test(inner) && (paragraph || !/^ {4}/.test(inner));
-        } else if (paragraph && !blank(i) && !startsBlock(lines[i])) b.push(lines[i++].replace(/^ +/, ''));
+        } else if (paragraph && !blank(i) && (!startsBlock(lines[i]) || /^ {0,3}=+[ \t]*$/.test(lines[i]))) { const lazy = lines[i++].replace(/^ +/, ''); b.push(/^(?:=+|-+)[ \t]*$/.test(lazy) ? `    ${lazy}` : lazy); }
         else break;
       }
       html.push(`<blockquote>\n${blocks(b.join('\n'), refs)}</blockquote>\n`); continue;
