@@ -11,6 +11,7 @@ const attribute = "[A-Za-z_:][A-Za-z0-9:._-]*(?:[ \\t\\n\\r\\f]*=[ \\t\\n\\r\\f]
 const tag = `(?:<${tagName}(?:[ \\t\\n\\r\\f]+${attribute})*[ \\t\\n\\r\\f]*/?>|</${tagName}[ \\t\\n\\r\\f]*>)`;
 const rawHTML = new RegExp(`^(?:<!--(?:-?>|[\\s\\S]*?-->)|<\\?[\\s\\S]*?\\?>|<![A-Za-z][^>]*>|<!\\[CDATA\\[[\\s\\S]*?\\]\\]>|${tag})`);
 const completeTag = new RegExp(`^ {0,3}${tag}[ \\t]*$`);
+const listMarker = /^( {0,3})([*+-]|\d{1,9}[.)])(?:([ \t]+)(.*)|$)/;
 
 // Numeric references are regular Unicode scalar values; named references are decoded by the browser
 // only when they remain in text, so retain unknown names literally.
@@ -269,30 +270,33 @@ function blocks(input, shared, tight = null, spacing) {
         html.push(`<table>\n<thead>\n${row(head, 'th')}\n</thead>\n<tbody>${rows.join('\n')}\n</tbody></table>\n`); continue;
       }
     }
-    if ((m = /^( {0,3})([*+-]|\d{1,9}[.)])([ \t]+)(.*)$/.exec(line))) {
+    if ((m = listMarker.exec(line))) {
       const ordered = /^\d/.test(m[2]), tag = ordered ? 'ol' : 'ul', start = ordered ? parseInt(m[2], 10) : 1, items = [];
       let loose = false;
       while (i < lines.length) {
-        const item = /^( {0,3})([*+-]|\d{1,9}[.)])([ \t]+)(.*)$/.exec(lines[i]);
+        const item = listMarker.exec(lines[i]);
         if (!item || /^\d/.test(item[2]) !== ordered || item[2].at(-1) !== m[2].at(-1)) break;
-        const marker = item[1].length + item[2].length, pad = item[3].replace(/\t/g, '    ').length;
-        const indent = pad > 4 ? marker + 1 : marker + pad, body = [`${pad > 4 ? ' '.repeat(pad - 1) : ''}${item[4]}`]; let sawBlank = false; i++;
+        const marker = item[1].length + item[2].length, pad = (item[3] ?? ' ').replace(/\t/g, '    ').length;
+        const empty = !(item[4] ?? '').trim();
+        const indent = empty || pad > 4 ? marker + 1 : marker + pad, body = [empty ? '' : `${pad > 4 ? ' '.repeat(pad - 1) : ''}${item[4]}`]; let sawBlank = false; i++;
         while (i < lines.length) {
           if (blank(i)) {
+            if (empty && body.length === 1) { if (listMarker.test(lines[i + 1] ?? '')) { loose = true; i++; } break; }
             const next = lines[i + 1] ?? '', nextIndent = (next.match(/^ */) ?? [''])[0].length;
-            if (!/^\s*$/.test(next) && !/^( {0,3})([*+-]|\d{1,9}[.)])[ \t]+/.test(next) && nextIndent < indent) break;
-            if (/^( {0,3})([*+-]|\d{1,9}[.)])[ \t]+/.test(next) || nextIndent >= indent) sawBlank = true;
+            if (!/^\s*$/.test(next) && !listMarker.test(next) && nextIndent < indent) break;
+            if (listMarker.test(next) || nextIndent >= indent) sawBlank = true;
             body.push(''); i++; continue;
           }
           const lead = (lines[i].match(/^ */) ?? [''])[0].length;
           if (lead >= indent) body.push(lines[i].slice(indent));
-          else if (/^( {0,3})([*+-]|\d{1,9}[.)])[ \t]+/.test(lines[i])) break;
+          else if (listMarker.test(lines[i])) break;
           else if (!sawBlank) body.push(lines[i]);
           else break;
           i++;
         }
-        if (sawBlank && body.at(-1) === '' && /^( {0,3})([*+-]|\d{1,9}[.)])[ \t]+/.test(lines[i] ?? '')) loose = true;
+        if (sawBlank && body.at(-1) === '' && listMarker.test(lines[i] ?? '')) loose = true;
         while (body.at(-1) === '') body.pop();
+        if (empty && body[0] === '') body.shift();
         let first = body[0] ?? '', check = '';
         const task = /^\[([ xX])\][ \t]+/.exec(first);
         if (task) { check = `<input${task[1].toLowerCase() === 'x' ? ' checked=""' : ''} disabled="" type="checkbox"> `; body[0] = first.slice(task[0].length); }
