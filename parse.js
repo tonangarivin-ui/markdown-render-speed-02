@@ -198,7 +198,7 @@ function inline(source, refs = Object.create(null), depth = 0, links = {}, inAnc
       if (m[1]?.toLowerCase() === 'xmpp') label += (/^\/[A-Za-z0-9@._+-]+/.exec(rest.slice(label.length))?.[0] ?? '').replace(/[._]+$/, '');
       put(`<a href="${esc(m[1] ? label : `mailto:${label}`)}">${esc(label)}</a>`); i += label.length; continue;
     }
-    if (!inLink && !inAnchor && (m = /^(?:[Hh][Tt][Tt][Pp][Ss]?:\/\/|www\.)[^\s<>]+/.exec(rest))) { let u = m[0]; for (;;) { const was = u; u = u.replace(/&[A-Za-z0-9]+;$/, ''); while (u.endsWith(')') && (u.match(/\)/g)?.length ?? 0) > (u.match(/\(/g)?.length ?? 0)) u = u.slice(0, -1); u = u.replace(/[?!.,;:*_~"']+$/, ''); if (u === was) break; }  const href = u.startsWith('www.') ? `http://${u}` : u; put(`<a href="${esc(uri(href))}">${esc(u)}</a>`); i += u.length; continue; }
+    if (!inLink && !inAnchor && (m = /^(?:[Hh][Tt][Tt][Pp][Ss]?:\/\/|www\.)[^\s<>]+/.exec(rest))) { let u = m[0]; const parentheses = []; for (let p = 0; p < u.length; p++) { if (u[p] === '(') parentheses.push(p); else if (u[p] === ')') parentheses.pop(); } if (parentheses.length) u = u.slice(0, parentheses[0]); for (;;) { const was = u; u = u.replace(/&[A-Za-z0-9]+;$/, ''); while (u.endsWith(')') && (u.match(/\)/g)?.length ?? 0) > (u.match(/\(/g)?.length ?? 0)) u = u.slice(0, -1); u = u.replace(/[?!.,;:*_~"']+$/, ''); if (u === was) break; }  const href = u.startsWith('www.') ? `http://${u}` : u; put(`<a href="${esc(uri(href))}">${esc(u)}</a>`); i += u.length; continue; }
     text += source[i++];
   }
   return resolveEmphasis(text).replace(/￼/g, () => slots.shift());
