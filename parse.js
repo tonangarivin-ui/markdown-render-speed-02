@@ -188,9 +188,10 @@ function definition(lines, at) {
   for (; i < source.length; i++) {
     if (source[i] === '\\') { label += source[i++] + (source[i] ?? ''); continue; }
     if (source[i] === ']') break;
+    if (source[i] === '[') return null;
     label += source[i];
   }
-  if (!label || source.slice(i, i + 2) !== ']:') return null;
+  if (!label.trim() || source.slice(i, i + 2) !== ']:') return null;
   i += 2; while (/\s/.test(source[i])) i++;
   let url = '';
   if (i === source.length) return null;
